@@ -279,31 +279,39 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ========================
 
 async def shaxsiy_kabinet(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    user_data = db.get_user(user.id)
-    balance = user_data.get('balance', 0) if user_data else 0
-    umm = db.get_umm(user.id)
-    is_prem = db.is_premium(user.id)
-    ref_count = db.get_referral_count(user.id)
-    premium_status = "✅ Aktiv" if is_prem else "❌ Yo'q"
-    bot_username = (await context.bot.get_me()).username
-    ref_link = f"https://t.me/{bot_username}?start={user.id}"
+    try:
+        user = update.effective_user
+        db.add_user(user.id, user.full_name, user.username or "")
+        user_data = db.get_user(user.id) or {}
+        balance = user_data.get('balance', 0)
+        umm = db.get_umm(user.id)
+        is_prem = db.is_premium(user.id)
+        ref_count = db.get_referral_count(user.id)
+        premium_status = "✅ Aktiv" if is_prem else "❌ Yo'q"
+        bot_me = await context.bot.get_me()
+        ref_link = f"https://t.me/{bot_me.username}?start={user.id}"
 
-    await update.message.reply_text(
-        f"👤 *Shaxsiy kabinet*\n\n"
-        f"🆔 ID: `{user.id}`\n"
-        f"👤 Ism: *{user.full_name}*\n"
-        f"💰 Balans: *{balance} so'm*\n"
-        f"💎 UMM tangalar: *{umm} UMM*\n"
-        f"⚡ Premium: {premium_status}\n"
-        f"👥 Taklif qilinganlar: *{ref_count} ta*\n\n"
-        f"🔗 *Referal havolangiz:*\n`{ref_link}`\n\n"
-        f"Do'st taklif qiling → *+{UMM_PER_REFERRAL} UMM*\n"
-        f"Do'st premium olsa → *+{UMM_PER_PREMIUM_REF} UMM*\n"
-        f"*{UMM_FOR_PREMIUM} UMM* = 1 oy Premium!",
-        parse_mode="Markdown",
-        reply_markup=cabinet_keyboard()
-    )
+        await update.message.reply_text(
+            f"👤 *Shaxsiy kabinet*\n\n"
+            f"🆔 ID: `{user.id}`\n"
+            f"👤 Ism: *{user.full_name}*\n"
+            f"💰 Balans: *{balance} so'm*\n"
+            f"💎 UMM tangalar: *{umm} UMM*\n"
+            f"⚡ Premium: {premium_status}\n"
+            f"👥 Taklif qilinganlar: *{ref_count} ta*\n\n"
+            f"🔗 *Referal havolangiz:*\n`{ref_link}`\n\n"
+            f"Do'st taklif qiling → *+{UMM_PER_REFERRAL} UMM*\n"
+            f"Do'st premium olsa → *+{UMM_PER_PREMIUM_REF} UMM*\n"
+            f"*{UMM_FOR_PREMIUM} UMM* = 1 oy Premium!",
+            parse_mode="Markdown",
+            reply_markup=cabinet_keyboard()
+        )
+    except Exception as e:
+        logger.error(f"Kabinet xato: {e}")
+        await update.message.reply_text(
+            "👤 Shaxsiy kabinet",
+            reply_markup=cabinet_keyboard()
+        )
 
 async def umm_tangalarim(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
