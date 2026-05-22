@@ -359,25 +359,49 @@ async def umm_premium_olish(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 async def balansim(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    user_data = db.get_user(user.id)
-    balance = user_data.get('balance', 0) if user_data else 0
-    await update.message.reply_text(
-        f"💰 *Balansingiz: {balance} so'm*\n\n"
-        f"Balans to'ldirish uchun ➕ tugmasini bosing.",
-        parse_mode="Markdown",
-        reply_markup=cabinet_keyboard()
-    )
+    try:
+        user = update.effective_user
+        db.add_user(user.id, user.full_name, user.username or "")
+        user_data = db.get_user(user.id) or {}
+        balance = user_data.get('balance', 0)
+        umm = db.get_umm(user.id)
+        is_prem = db.is_premium(user.id)
+        premium_status = "✅ Aktiv" if is_prem else "❌ Yo'q"
+        await update.message.reply_text(
+            f"💰 *Balansingiz*\n\n"
+            f"💵 Pul balansi: *{balance} so'm*\n"
+            f"💎 UMM tangalar: *{umm} UMM*\n"
+            f"⚡ Premium: {premium_status}\n\n"
+            f"Balans to'ldirish uchun ➕ tugmasini bosing.",
+            parse_mode="Markdown",
+            reply_markup=cabinet_keyboard()
+        )
+    except Exception as e:
+        logger.error(f"Balansim xato: {e}")
+        await update.message.reply_text("💰 Balans ma'lumotlari", reply_markup=cabinet_keyboard())
 
 async def balans_toldirish(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "➕ *Balans to'ldirish*\n\n"
-        "To'lov uchun quyidagi karta raqamiga o'tkazing:\n\n"
-        "💳 `8600 0000 0000 0000`\n\n"
-        "To'lovdan so'ng chekni adminga yuboring: @biolog_UMM",
-        parse_mode="Markdown",
-        reply_markup=cabinet_keyboard()
-    )
+    try:
+        user = update.effective_user
+        bot_me = await context.bot.get_me()
+        ref_link = f"https://t.me/{bot_me.username}?start={user.id}"
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("💳 Karta orqali to'ldirish", callback_data="pay_card")],
+            [InlineKeyboardButton("👥 Referal orqali UMM ishlash", callback_data="pay_ref")],
+        ])
+        await update.message.reply_text(
+            "➕ *Balans to'ldirish*\n\n"
+            "Qaysi usulni tanlaysiz?\n\n"
+            "💳 *Karta orqali* — pul to'lab premium oling\n"
+            "👥 *Referal orqali* — do'stlarni taklif qilib UMM tanga ishlang\n"
+            f"   (+{UMM_PER_REFERRAL} UMM = 1 do'st, +{UMM_PER_PREMIUM_REF} UMM = do'st premium olsa)\n"
+            f"   {UMM_FOR_PREMIUM} UMM = 1 oy Premium!",
+            parse_mode="Markdown",
+            reply_markup=keyboard
+        )
+    except Exception as e:
+        logger.error(f"Balans toldirish xato: {e}")
+        await update.message.reply_text("➕ Balans to'ldirish", reply_markup=cabinet_keyboard())
 
 async def pullik_kurs_sotib_olish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = InlineKeyboardMarkup([
@@ -392,6 +416,41 @@ async def pullik_kurs_sotib_olish(update: Update, context: ContextTypes.DEFAULT_
         parse_mode="Markdown",
         reply_markup=keyboard
     )
+
+async def pay_card_ref_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+
+    if query.data == "pay_card":
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("⚡ 1 oylik — 50,000 so'm", callback_data="buy_1")],
+            [InlineKeyboardButton("⚡ 3 oylik — 120,000 so'm", callback_data="buy_3")],
+            [InlineKeyboardButton("⚡ 1 yillik — 400,000 so'm", callback_data="buy_12")],
+        ])
+        await query.edit_message_text(
+            "💳 *Karta orqali to'lov*\n\n"
+            "Tarifni tanlang 👇",
+            parse_mode="Markdown",
+            reply_markup=keyboard
+        )
+    elif query.data == "pay_ref":
+        bot_info = await query.get_bot().get_me()
+        ref_link = f"https://t.me/{bot_info.username}?start={user_id}"
+        umm = db.get_umm(user_id)
+        ref_count = db.get_referral_count(user_id)
+        await query.edit_message_text(
+            f"👥 *Referal orqali UMM ishlash*\n\n"
+            f"💎 Sizda hozir: *{umm} UMM*\n"
+            f"👥 Taklif qilganlar: *{ref_count} ta*\n\n"
+            f"📌 *Qoidalar:*\n"
+            f"• Do'st taklif qiling → *+{UMM_PER_REFERRAL} UMM*\n"
+            f"• Do'st premium olsa → *+{UMM_PER_PREMIUM_REF} UMM*\n"
+            f"• *{UMM_FOR_PREMIUM} UMM* = 1 oy Premium!\n\n"
+            f"🔗 *Referal havolangiz:*\n`{ref_link}`\n\n"
+            f"Ushbu havolani do'stlaringizga yuboring!",
+            parse_mode="Markdown"
+        )
 
 async def umm_buy_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -2391,6 +2450,7 @@ def main():
     app.add_handler(CommandHandler("admin_qosh", admin_qosh_cmd))
     app.add_handler(CommandHandler("admin_ochi", admin_ochi_cmd))
     app.add_handler(CallbackQueryHandler(buy_callback, pattern="^buy_"))
+    app.add_handler(CallbackQueryHandler(pay_card_ref_callback, pattern="^pay_"))
     app.add_handler(CallbackQueryHandler(umm_buy_callback, pattern="^umm_buy_premium"))
     app.add_handler(CallbackQueryHandler(content_free_paid_callback, pattern="^content_"))
     app.add_handler(CallbackQueryHandler(delete_callback, pattern="^del_"))
