@@ -299,7 +299,7 @@ async def shaxsiy_kabinet(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"💎 UMM tangalar: *{umm} UMM*\n"
             f"⚡ Premium: {premium_status}\n"
             f"👥 Taklif qilinganlar: *{ref_count} ta*\n\n"
-            f"🔗 *Referal havolangiz:*\n`{ref_link}`\n\n"
+            f"🔗 *Referal havolangiz:*\n{ref_link}\n\n"
             f"Do'st taklif qiling → *+{UMM_PER_REFERRAL} UMM*\n"
             f"Do'st premium olsa → *+{UMM_PER_PREMIUM_REF} UMM*\n"
             f"*{UMM_FOR_PREMIUM} UMM* = 1 oy Premium!",
@@ -327,7 +327,7 @@ async def umm_tangalarim(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"• Do'st taklif qiling → *+{UMM_PER_REFERRAL} UMM*\n"
         f"• Do'st premium olsa → *+{UMM_PER_PREMIUM_REF} UMM*\n\n"
         f"💡 *{UMM_FOR_PREMIUM} UMM = 1 oy Premium*\n\n"
-        f"🔗 Referal havolangiz:\n`{ref_link}`",
+        f"🔗 Referal havolangiz:\n{ref_link}",
         parse_mode="Markdown",
         reply_markup=cabinet_keyboard()
     )
@@ -353,7 +353,7 @@ async def umm_premium_olish(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"💎 Sizda *{umm} UMM* bor\n"
             f"Premium uchun *{UMM_FOR_PREMIUM} UMM* kerak\n"
             f"Yana *{kerak} UMM* yig'ing!\n\n"
-            f"🔗 Do'stlaringizni taklif qiling:\n`{ref_link}`",
+            f"🔗 Do'stlaringizni taklif qiling:\n{ref_link}",
             parse_mode="Markdown",
             reply_markup=cabinet_keyboard()
         )
@@ -447,7 +447,7 @@ async def pay_card_ref_callback(update: Update, context: ContextTypes.DEFAULT_TY
             f"• Do'st taklif qiling → *+{UMM_PER_REFERRAL} UMM*\n"
             f"• Do'st premium olsa → *+{UMM_PER_PREMIUM_REF} UMM*\n"
             f"• *{UMM_FOR_PREMIUM} UMM* = 1 oy Premium!\n\n"
-            f"🔗 *Referal havolangiz:*\n`{ref_link}`\n\n"
+            f"🔗 *Referal havolangiz:*\n{ref_link}\n\n"
             f"Ushbu havolani do'stlaringizga yuboring!",
             parse_mode="Markdown"
         )
