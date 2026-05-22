@@ -219,6 +219,14 @@ SECTION_MAP = {
 # /start
 # ========================
 
+async def back_to_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.clear()
+    user = update.effective_user
+    await update.message.reply_text(
+        f"Bosh menyu 👇",
+        reply_markup=main_menu_keyboard()
+    )
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     is_new = db.get_user(user.id) is None
@@ -2237,8 +2245,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🏆 Masala — sertifikat darajasi": masala_sertifikat,
         "👨‍🏫 O'qituvchi haqida": o_qituvchi,
         "📩 Admin bilan bog'lanish": admin_boglanish,
-        "◀️ Orqaga": start,
-        "◀️ Bekor qilish": start,
+        "◀️ Orqaga": back_to_main,
+        "◀️ Bekor qilish": back_to_main,
         "🛠 Admin panel": admin_panel,
         "➕ Test qo'shish": admin_test_qosh,
         "📊 Test natijalari": test_natijalari,
