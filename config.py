@@ -66,3 +66,6 @@ PREMIUM_PRICES = {
     3: 120000,  # 3 oy
     6: 200000,  # 6 oy
 }
+
+# Bot username (@siz bergan username)
+BOT_USERNAME = "umm_biologiya_bot"  # @ belgisisiz

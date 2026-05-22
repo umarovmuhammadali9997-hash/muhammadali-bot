@@ -5,7 +5,7 @@ from telegram.ext import (
     filters, ContextTypes, CallbackQueryHandler
 )
 from database import Database
-from config import BOT_TOKEN, SUPER_ADMINS, SECTIONS, SOCIAL_LINKS, UMM_PER_REFERRAL, UMM_PER_PREMIUM_REF, UMM_FOR_PREMIUM, PREMIUM_PRICES
+from config import BOT_TOKEN, SUPER_ADMINS, SECTIONS, SOCIAL_LINKS, UMM_PER_REFERRAL, UMM_PER_PREMIUM_REF, UMM_FOR_PREMIUM, PREMIUM_PRICES, BOT_USERNAME
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -288,8 +288,7 @@ async def shaxsiy_kabinet(update: Update, context: ContextTypes.DEFAULT_TYPE):
         is_prem = db.is_premium(user.id)
         ref_count = db.get_referral_count(user.id)
         premium_status = "✅ Aktiv" if is_prem else "❌ Yo'q"
-        bot_me = await context.bot.get_me()
-        ref_link = f"https://t.me/{bot_me.username}?start={user.id}"
+        ref_link = f"https://t.me/{BOT_USERNAME}?start={user.id}"
 
         await update.message.reply_text(
             f"👤 *Shaxsiy kabinet*\n\n"
@@ -317,8 +316,7 @@ async def umm_tangalarim(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     umm = db.get_umm(user_id)
     ref_count = db.get_referral_count(user_id)
-    bot_username = (await context.bot.get_me()).username
-    ref_link = f"https://t.me/{bot_username}?start={user_id}"
+    ref_link = f"https://t.me/{BOT_USERNAME}?start={user_id}"
     await update.message.reply_text(
         f"💎 *UMM Tanga tizimi*\n\n"
         f"Sizda: *{umm} UMM*\n"
@@ -347,8 +345,7 @@ async def umm_premium_olish(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     else:
         kerak = UMM_FOR_PREMIUM - umm
-        bot_username = (await context.bot.get_me()).username
-        ref_link = f"https://t.me/{bot_username}?start={user_id}"
+        ref_link = f"https://t.me/{BOT_USERNAME}?start={user_id}"
         await update.message.reply_text(
             f"💎 Sizda *{umm} UMM* bor\n"
             f"Premium uchun *{UMM_FOR_PREMIUM} UMM* kerak\n"
@@ -383,8 +380,7 @@ async def balansim(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def balans_toldirish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user = update.effective_user
-        bot_me = await context.bot.get_me()
-        ref_link = f"https://t.me/{bot_me.username}?start={user.id}"
+        ref_link = f"https://t.me/{BOT_USERNAME}?start={user.id}"
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("💳 Karta orqali to'ldirish", callback_data="pay_card")],
             [InlineKeyboardButton("👥 Referal orqali UMM ishlash", callback_data="pay_ref")],
@@ -435,8 +431,7 @@ async def pay_card_ref_callback(update: Update, context: ContextTypes.DEFAULT_TY
             reply_markup=keyboard
         )
     elif query.data == "pay_ref":
-        bot_info = await query.get_bot().get_me()
-        ref_link = f"https://t.me/{bot_info.username}?start={user_id}"
+        ref_link = f"https://t.me/{BOT_USERNAME}?start={user_id}"
         umm = db.get_umm(user_id)
         ref_count = db.get_referral_count(user_id)
         await query.edit_message_text(
