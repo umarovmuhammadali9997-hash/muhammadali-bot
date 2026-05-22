@@ -54,3 +54,15 @@ SOCIAL_LINKS = {
     "instagram": "https://instagram.com/biolog_Muhammadali_master_sefr",
     "youtube": "https://youtube.com/@muhammadaliumarov4934",
 }
+
+# UMM Tanga tizimi
+UMM_PER_REFERRAL = 2        # Har bir taklif uchun
+UMM_PER_PREMIUM_REF = 50    # Do'st premium olsa
+UMM_FOR_PREMIUM = 100       # 1 oy premium narxi (UMM da)
+
+# Premium narxlari (so'm)
+PREMIUM_PRICES = {
+    1: 50000,   # 1 oy
+    3: 120000,  # 3 oy
+    6: 200000,  # 6 oy
+}

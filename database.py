@@ -16,6 +16,54 @@ class Database:
                     user_id INTEGER PRIMARY KEY,
                     full_name TEXT,
                     username TEXT,
+                    balance INTEGER DEFAULT 0,
+                    is_premium INTEGER DEFAULT 0,
+                    umm_coins INTEGER DEFAULT 0,
+                    referred_by INTEGER DEFAULT NULL,
+                    premium_until TEXT DEFAULT NULL,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            try:
+                conn.execute("ALTER TABLE users ADD COLUMN balance INTEGER DEFAULT 0")
+            except:
+                pass
+            try:
+                conn.execute("ALTER TABLE users ADD COLUMN is_premium INTEGER DEFAULT 0")
+            except:
+                pass
+            try:
+                conn.execute("ALTER TABLE users ADD COLUMN umm_coins INTEGER DEFAULT 0")
+            except:
+                pass
+            try:
+                conn.execute("ALTER TABLE users ADD COLUMN referred_by INTEGER DEFAULT NULL")
+            except:
+                pass
+            try:
+                conn.execute("ALTER TABLE users ADD COLUMN premium_until TEXT DEFAULT NULL")
+            except:
+                pass
+            # Referal log
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS referral_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    referrer_id INTEGER,
+                    referred_id INTEGER,
+                    reward_type TEXT,
+                    coins INTEGER,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            # To'lov so'rovlari
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS payment_requests (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER,
+                    amount INTEGER,
+                    months INTEGER,
+                    status TEXT DEFAULT 'pending',
+                    photo_file_id TEXT,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP
                 )
             """)
@@ -35,22 +83,85 @@ class Database:
                     content_type TEXT,
                     file_id TEXT,
                     caption TEXT,
+                    is_free INTEGER DEFAULT 1,
                     added_by INTEGER,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+            # Mavjud tablega ustun qo'shish (agar yo'q bo'lsa)
+            try:
+                conn.execute("ALTER TABLE content ADD COLUMN is_free INTEGER DEFAULT 1")
+            except:
+                pass
             conn.commit()
         self.create_test_tables()
         self.create_teacher_tables()
 
     # ── USERS ──
     def add_user(self, user_id, full_name, username):
+        """Foydalanuvchini qo'shadi. True qaytarsa — yangi foydalanuvchi."""
         with self.connect() as conn:
+            existing = conn.execute(
+                "SELECT user_id FROM users WHERE user_id=?", (user_id,)
+            ).fetchone()
+            if existing:
+                return False  # Eski foydalanuvchi
             conn.execute(
-                "INSERT OR IGNORE INTO users (user_id, full_name, username) VALUES (?,?,?)",
+                "INSERT INTO users (user_id, full_name, username) VALUES (?,?,?)",
                 (user_id, full_name, username)
             )
             conn.commit()
+            return True  # Yangi foydalanuvchi
+
+    def is_already_referred(self, user_id):
+        """Bu foydalanuvchi allaqachon referal orqali kelganmi?"""
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT referred_by FROM users WHERE user_id=?", (user_id,)
+            ).fetchone()
+            return bool(row and row[0] is not None)
+
+    def set_referred_by_safe(self, new_user_id, referrer_id):
+        """
+        Referal faqat bir marta va faqat yangi foydalanuvchi uchun.
+        True qaytarsa — muvaffaqiyatli.
+        """
+        with self.connect() as conn:
+            # 1. Foydalanuvchi haqiqatan yangi bo'lishi kerak
+            user_row = conn.execute(
+                "SELECT referred_by, created_at FROM users WHERE user_id=?", (new_user_id,)
+            ).fetchone()
+            if not user_row:
+                return False  # Foydalanuvchi topilmadi
+            if user_row[0] is not None:
+                return False  # Allaqachon referal bor
+
+            # 2. O'zini o'zi taklif qila olmaydi
+            if new_user_id == referrer_id:
+                return False
+
+            # 3. Referrer mavjudmi?
+            ref_row = conn.execute(
+                "SELECT user_id FROM users WHERE user_id=?", (referrer_id,)
+            ).fetchone()
+            if not ref_row:
+                return False
+
+            # 4. Bir xil referral log yozilganmi?
+            dup = conn.execute(
+                "SELECT id FROM referral_log WHERE referrer_id=? AND referred_id=?",
+                (referrer_id, new_user_id)
+            ).fetchone()
+            if dup:
+                return False
+
+            # Hammasi tekshirildi — saqlash
+            conn.execute(
+                "UPDATE users SET referred_by=? WHERE user_id=?",
+                (referrer_id, new_user_id)
+            )
+            conn.commit()
+            return True
 
     def get_all_users(self):
         with self.connect() as conn:
@@ -92,11 +203,42 @@ class Database:
             return [dict(r) for r in conn.execute("SELECT * FROM admins").fetchall()]
 
     # ── CONTENT ──
-    def add_content(self, section, content_type, file_id, caption, added_by):
+    def add_content(self, section, content_type, file_id, caption, added_by, is_free=1):
         with self.connect() as conn:
             conn.execute(
-                "INSERT INTO content (section, content_type, file_id, caption, added_by) VALUES (?,?,?,?,?)",
-                (section, content_type, file_id, caption, added_by)
+                "INSERT INTO content (section, content_type, file_id, caption, is_free, added_by) VALUES (?,?,?,?,?,?)",
+                (section, content_type, file_id, caption, is_free, added_by)
+            )
+            conn.commit()
+
+    def get_free_content(self, section):
+        with self.connect() as conn:
+            conn.row_factory = sqlite3.Row
+            return [dict(r) for r in conn.execute(
+                "SELECT * FROM content WHERE section=? AND is_free=1 ORDER BY created_at DESC",
+                (section,)
+            ).fetchall()]
+
+    def get_paid_content(self, section):
+        with self.connect() as conn:
+            conn.row_factory = sqlite3.Row
+            return [dict(r) for r in conn.execute(
+                "SELECT * FROM content WHERE section=? AND is_free=0 ORDER BY created_at DESC",
+                (section,)
+            ).fetchall()]
+
+    def is_premium(self, user_id):
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT is_premium FROM users WHERE user_id=?", (user_id,)
+            ).fetchone()
+            return bool(row[0]) if row else False
+
+    def set_premium(self, user_id, status=True):
+        with self.connect() as conn:
+            conn.execute(
+                "UPDATE users SET is_premium=? WHERE user_id=?",
+                (int(status), user_id)
             )
             conn.commit()
 
@@ -225,6 +367,85 @@ class Database:
             return [dict(r) for r in conn.execute(
                 "SELECT * FROM tests WHERE teacher_id=? ORDER BY created_at DESC", (teacher_id,)
             ).fetchall()]
+
+    # ── UMM TANGA TIZIMI ──
+
+    def get_umm(self, user_id):
+        with self.connect() as conn:
+            row = conn.execute("SELECT umm_coins FROM users WHERE user_id=?", (user_id,)).fetchone()
+            return row[0] if row else 0
+
+    def add_umm(self, user_id, amount, reason=""):
+        with self.connect() as conn:
+            conn.execute("UPDATE users SET umm_coins = umm_coins + ? WHERE user_id=?", (amount, user_id))
+            conn.commit()
+
+    def spend_umm(self, user_id, amount):
+        with self.connect() as conn:
+            current = conn.execute("SELECT umm_coins FROM users WHERE user_id=?", (user_id,)).fetchone()
+            if not current or current[0] < amount:
+                return False
+            conn.execute("UPDATE users SET umm_coins = umm_coins - ? WHERE user_id=?", (amount, user_id))
+            conn.commit()
+            return True
+
+    def add_referral(self, referrer_id, referred_id, reward_type, coins):
+        with self.connect() as conn:
+            conn.execute(
+                "INSERT INTO referral_log (referrer_id, referred_id, reward_type, coins) VALUES (?,?,?,?)",
+                (referrer_id, referred_id, reward_type, coins)
+            )
+            conn.commit()
+
+    def get_referral_count(self, user_id):
+        with self.connect() as conn:
+            return conn.execute(
+                "SELECT COUNT(*) FROM referral_log WHERE referrer_id=? AND reward_type='join'",
+                (user_id,)
+            ).fetchone()[0]
+
+
+
+    def activate_premium_with_umm(self, user_id):
+        from datetime import datetime, timedelta
+        until = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
+        with self.connect() as conn:
+            conn.execute(
+                "UPDATE users SET is_premium=1, premium_until=? WHERE user_id=?",
+                (until, user_id)
+            )
+            conn.commit()
+
+    def add_payment_request(self, user_id, amount, months, photo_id):
+        with self.connect() as conn:
+            conn.execute(
+                "INSERT INTO payment_requests (user_id, amount, months, photo_file_id) VALUES (?,?,?,?)",
+                (user_id, amount, months, photo_id)
+            )
+            conn.commit()
+
+    def get_pending_payments(self):
+        with self.connect() as conn:
+            conn.row_factory = sqlite3.Row
+            return [dict(r) for r in conn.execute(
+                "SELECT * FROM payment_requests WHERE status='pending' ORDER BY created_at DESC"
+            ).fetchall()]
+
+    def approve_payment(self, payment_id, user_id, months):
+        from datetime import datetime, timedelta
+        until = (datetime.now() + timedelta(days=30*months)).strftime("%Y-%m-%d")
+        with self.connect() as conn:
+            conn.execute("UPDATE payment_requests SET status='approved' WHERE id=?", (payment_id,))
+            conn.execute(
+                "UPDATE users SET is_premium=1, premium_until=? WHERE user_id=?",
+                (until, user_id)
+            )
+            conn.commit()
+
+    def reject_payment(self, payment_id):
+        with self.connect() as conn:
+            conn.execute("UPDATE payment_requests SET status='rejected' WHERE id=?", (payment_id,))
+            conn.commit()
 
     def save_test_result(self, user_id, full_name, region, phone, grade, test_code, correct, wrong, total, percentage, ball):
         with self.connect() as conn:

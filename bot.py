@@ -5,7 +5,7 @@ from telegram.ext import (
     filters, ContextTypes, CallbackQueryHandler
 )
 from database import Database
-from config import BOT_TOKEN, SUPER_ADMINS, SECTIONS, SOCIAL_LINKS
+from config import BOT_TOKEN, SUPER_ADMINS, SECTIONS, SOCIAL_LINKS, UMM_PER_REFERRAL, UMM_PER_PREMIUM_REF, UMM_FOR_PREMIUM, PREMIUM_PRICES
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -18,15 +18,35 @@ db = Database()
 
 def main_menu_keyboard():
     return ReplyKeyboardMarkup([
-        [KeyboardButton("🔥 DTM 30-TALIK TEST ISHLASH 🔥")],
-        [KeyboardButton("✅ DTM Test tekshirish"), KeyboardButton("🏅 MS Test tekshirish")],
+        [KeyboardButton("👤 Shaxsiy kabinet"), KeyboardButton("🎯 Loyihalar")],
+        [KeyboardButton("🔥 DTM 30 Testlar"), KeyboardButton("📝 Test xizmati")],
+        [KeyboardButton("👨‍🏫 O'qituvchi haqida")],
+    ], resize_keyboard=True)
+
+def cabinet_keyboard():
+    return ReplyKeyboardMarkup([
+        [KeyboardButton("💰 Balansim"), KeyboardButton("💎 UMM tangalarim")],
+        [KeyboardButton("➕ Balans to'ldirish"), KeyboardButton("⚡ Pullik kurs sotib olish")],
+        [KeyboardButton("🎁 UMM bilan premium olish")],
+        [KeyboardButton("◀️ Orqaga")],
+    ], resize_keyboard=True)
+
+def test_xizmati_keyboard():
+    return ReplyKeyboardMarkup([
+        [KeyboardButton("✅ DTM test tekshirish")],
+        [KeyboardButton("🏅 MS test tekshirish")],
+        [KeyboardButton("👨‍🏫 O'qituvchi paneli")],
+        [KeyboardButton("◀️ Orqaga")],
+    ], resize_keyboard=True)
+
+def loyihalar_keyboard_new():
+    return ReplyKeyboardMarkup([
         [KeyboardButton("📚 Nazariya uchun tayyorgarlik")],
         [KeyboardButton("🔬 Masala — noldan boshlash")],
         [KeyboardButton("🏆 Masala — sertifikat darajasi")],
-        [KeyboardButton("📝 DTM testlar")],
-        [KeyboardButton("👨‍🏫 O'qituvchi paneli")],
-        [KeyboardButton("👨‍🏫 O'qituvchi haqida")],
+        [KeyboardButton("📝 DTM testlar arxivi")],
         [KeyboardButton("📩 Admin bilan bog'lanish")],
+        [KeyboardButton("◀️ Orqaga")],
     ], resize_keyboard=True)
 
 def nazariya_keyboard():
@@ -92,12 +112,31 @@ def admin_keyboard():
 
 def sections_keyboard():
     return ReplyKeyboardMarkup([
+        # Nazariya
         [KeyboardButton("📖 Nazariy mavzular darsi")],
         [KeyboardButton("📝 Mavzular yuzasidan testlar")],
         [KeyboardButton("🔍 Nazariy test tahlillari")],
+        # Noldan masalalar
         [KeyboardButton("⚡ noldan: ATF"), KeyboardButton("🧬 noldan: DNK")],
         [KeyboardButton("🔄 noldan: Gametogenez"), KeyboardButton("🧪 noldan: Genetika")],
         [KeyboardButton("🔋 noldan: Energetik almashinuv")],
+        # Sertifikat darajasi
+        [KeyboardButton("📚 sert: M.S Kitoblar")],
+        [KeyboardButton("⚡ sert: ATF murakkab"), KeyboardButton("🧬 sert: DNK murakkab")],
+        [KeyboardButton("🔄 sert: Gametogenez"), KeyboardButton("🧪 sert: Genetika")],
+        [KeyboardButton("🌍 sert: Xardi-Vaynberg")],
+        [KeyboardButton("🔀 sert: Qo'sh krosingover")],
+        [KeyboardButton("🔁 sert: Krosingover")],
+        # DTM arxivi - yillar
+        [KeyboardButton("📄 dtm: 2019"), KeyboardButton("📄 dtm: 2020")],
+        [KeyboardButton("📄 dtm: 2021"), KeyboardButton("📄 dtm: 2022")],
+        [KeyboardButton("📄 dtm: 2023"), KeyboardButton("📄 dtm: 2024")],
+        # DTM arxivi - mavzular
+        [KeyboardButton("🌿 dtm: Botanika"), KeyboardButton("🐾 dtm: Zoologiya")],
+        [KeyboardButton("🧬 dtm: Sitologiya"), KeyboardButton("🧫 dtm: Genetika")],
+        [KeyboardButton("🦠 dtm: Mikrobio"), KeyboardButton("🌱 dtm: Ekologiya")],
+        # O'qituvchi rasmlari
+        [KeyboardButton("👨‍🏫 Muhammadali rasmi"), KeyboardButton("👨‍🏫 Asadulloh rasmi")],
         [KeyboardButton("◀️ Bekor qilish")],
     ], resize_keyboard=True)
 
@@ -114,6 +153,35 @@ SECTION_MAP = {
     "🔄 noldan: Gametogenez": "gametogenez",
     "🧪 noldan: Genetika": "genetika",
     "🔋 noldan: Energetik almashinuv": "energetik",
+    # Sertifikat (admin panel uchun)
+    "📚 sert: M.S Kitoblar": "sert_ms",
+    "⚡ sert: ATF murakkab": "sert_atf",
+    "🧬 sert: DNK murakkab": "sert_dnk",
+    "🔄 sert: Gametogenez": "sert_gamet",
+    "🧪 sert: Genetika": "sert_genetika",
+    "🌍 sert: Xardi-Vaynberg": "sert_xardi",
+    "🔀 sert: Qo'sh krosingover": "sert_qosh",
+    "🔁 sert: Krosingover": "sert_krosing",
+    # DTM arxivi (admin panel uchun)
+    "📄 dtm: 2019": "dtm_2019",
+    "📄 dtm: 2020": "dtm_2020",
+    "📄 dtm: 2021": "dtm_2021",
+    "📄 dtm: 2022": "dtm_2022",
+    "📄 dtm: 2023": "dtm_2023",
+    "📄 dtm: 2024": "dtm_2024",
+    "🌿 dtm: Botanika": "dtm_botanika",
+    "🐾 dtm: Zoologiya": "dtm_zoologiya",
+    "🧬 dtm: Sitologiya": "dtm_sitologiya",
+    "🧫 dtm: Genetika": "dtm_genetika",
+    "🦠 dtm: Mikrobio": "dtm_mikrobio",
+    "🌱 dtm: Ekologiya": "dtm_ekologiya",
+    # Nazariya (admin panel uchun)
+    "📖 Nazariy mavzular darsi": "nazariy_dars",
+    "📝 Mavzular yuzasidan testlar": "mavzu_testlar",
+    "🔍 Nazariy test tahlillari": "test_tahlil",
+    # O'qituvchi rasmlari
+    "👨‍🏫 Muhammadali rasmi": "teacher_photo",
+    "👨‍🏫 Asadulloh rasmi": "teacher2_photo",
     "⚡ ATF": "atf",
     "🧬 DNK": "dnk",
     "🔄 Gametogenez": "gametogenez",
@@ -153,8 +221,33 @@ SECTION_MAP = {
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
+    is_new = db.get_user(user.id) is None
     db.add_user(user.id, user.full_name, user.username)
     context.user_data.clear()
+
+    # Referal tekshirish — faqat yangi foydalanuvchi uchun, bir marta
+    args = context.args
+    if args and is_new:
+        try:
+            referrer_id = int(args[0])
+            success = db.set_referred_by_safe(user.id, referrer_id)
+            if success:
+                # Taklif qilganga UMM ber
+                db.add_umm(referrer_id, UMM_PER_REFERRAL)
+                db.add_referral(referrer_id, user.id, "join", UMM_PER_REFERRAL)
+                try:
+                    ref_count = db.get_referral_count(referrer_id)
+                    await context.bot.send_message(
+                        referrer_id,
+                        f"🎉 *Do'stingiz botga qo'shildi!*\n"
+                        f"💎 Sizga *+{UMM_PER_REFERRAL} UMM* tanga berildi!\n"
+                        f"👥 Jami taklif qilganlar: *{ref_count} ta*",
+                        parse_mode="Markdown"
+                    )
+                except:
+                    pass
+        except:
+            pass
 
     caption = (
         f"Assalomu aleykum, *{user.first_name}*! 👋\n\n"
@@ -176,6 +269,175 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ========================
 # ASOSIY MENYULAR
 # ========================
+
+async def shaxsiy_kabinet(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    user_data = db.get_user(user.id)
+    balance = user_data.get('balance', 0) if user_data else 0
+    umm = db.get_umm(user.id)
+    is_prem = db.is_premium(user.id)
+    ref_count = db.get_referral_count(user.id)
+    premium_status = "✅ Aktiv" if is_prem else "❌ Yo'q"
+    bot_username = (await context.bot.get_me()).username
+    ref_link = f"https://t.me/{bot_username}?start={user.id}"
+
+    await update.message.reply_text(
+        f"👤 *Shaxsiy kabinet*\n\n"
+        f"🆔 ID: `{user.id}`\n"
+        f"👤 Ism: *{user.full_name}*\n"
+        f"💰 Balans: *{balance} so'm*\n"
+        f"💎 UMM tangalar: *{umm} UMM*\n"
+        f"⚡ Premium: {premium_status}\n"
+        f"👥 Taklif qilinganlar: *{ref_count} ta*\n\n"
+        f"🔗 *Referal havolangiz:*\n`{ref_link}`\n\n"
+        f"Do'st taklif qiling → *+{UMM_PER_REFERRAL} UMM*\n"
+        f"Do'st premium olsa → *+{UMM_PER_PREMIUM_REF} UMM*\n"
+        f"*{UMM_FOR_PREMIUM} UMM* = 1 oy Premium!",
+        parse_mode="Markdown",
+        reply_markup=cabinet_keyboard()
+    )
+
+async def umm_tangalarim(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    umm = db.get_umm(user_id)
+    ref_count = db.get_referral_count(user_id)
+    bot_username = (await context.bot.get_me()).username
+    ref_link = f"https://t.me/{bot_username}?start={user_id}"
+    await update.message.reply_text(
+        f"💎 *UMM Tanga tizimi*\n\n"
+        f"Sizda: *{umm} UMM*\n"
+        f"Taklif qilinganlar: *{ref_count} ta*\n\n"
+        f"📌 *Qanday UMM ishlash mumkin:*\n"
+        f"• Do'st taklif qiling → *+{UMM_PER_REFERRAL} UMM*\n"
+        f"• Do'st premium olsa → *+{UMM_PER_PREMIUM_REF} UMM*\n\n"
+        f"💡 *{UMM_FOR_PREMIUM} UMM = 1 oy Premium*\n\n"
+        f"🔗 Referal havolangiz:\n`{ref_link}`",
+        parse_mode="Markdown",
+        reply_markup=cabinet_keyboard()
+    )
+
+async def umm_premium_olish(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    umm = db.get_umm(user_id)
+    if umm >= UMM_FOR_PREMIUM:
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton(f"✅ {UMM_FOR_PREMIUM} UMM sarflash — 1 oy Premium", callback_data="umm_buy_premium")]
+        ])
+        await update.message.reply_text(
+            f"💎 Sizda *{umm} UMM* bor\n\n"
+            f"*{UMM_FOR_PREMIUM} UMM* sarflab *1 oy Premium* olasizmi?",
+            parse_mode="Markdown",
+            reply_markup=keyboard
+        )
+    else:
+        kerak = UMM_FOR_PREMIUM - umm
+        bot_username = (await context.bot.get_me()).username
+        ref_link = f"https://t.me/{bot_username}?start={user_id}"
+        await update.message.reply_text(
+            f"💎 Sizda *{umm} UMM* bor\n"
+            f"Premium uchun *{UMM_FOR_PREMIUM} UMM* kerak\n"
+            f"Yana *{kerak} UMM* yig'ing!\n\n"
+            f"🔗 Do'stlaringizni taklif qiling:\n`{ref_link}`",
+            parse_mode="Markdown",
+            reply_markup=cabinet_keyboard()
+        )
+
+async def balansim(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    user_data = db.get_user(user.id)
+    balance = user_data.get('balance', 0) if user_data else 0
+    await update.message.reply_text(
+        f"💰 *Balansingiz: {balance} so'm*\n\n"
+        f"Balans to'ldirish uchun ➕ tugmasini bosing.",
+        parse_mode="Markdown",
+        reply_markup=cabinet_keyboard()
+    )
+
+async def balans_toldirish(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "➕ *Balans to'ldirish*\n\n"
+        "To'lov uchun quyidagi karta raqamiga o'tkazing:\n\n"
+        "💳 `8600 0000 0000 0000`\n\n"
+        "To'lovdan so'ng chekni adminga yuboring: @biolog_UMM",
+        parse_mode="Markdown",
+        reply_markup=cabinet_keyboard()
+    )
+
+async def pullik_kurs_sotib_olish(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("⚡ 1 oylik — 100,000 so'm", callback_data="buy_1")],
+        [InlineKeyboardButton("⚡ 3 oylik — 250,000 so'm", callback_data="buy_3")],
+        [InlineKeyboardButton("⚡ 1 yillik — 800,000 so'm", callback_data="buy_12")],
+    ])
+    await update.message.reply_text(
+        "⚡ *Pullik kurs — Tariflar*\n\n"
+        "Premium obuna bilan barcha materiallar ochiladi!\n\n"
+        "Tarifni tanlang 👇",
+        parse_mode="Markdown",
+        reply_markup=keyboard
+    )
+
+async def umm_buy_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    umm = db.get_umm(user_id)
+    if umm >= UMM_FOR_PREMIUM:
+        success = db.spend_umm(user_id, UMM_FOR_PREMIUM)
+        if success:
+            db.activate_premium_with_umm(user_id)
+            # Referrer ga UMM_PER_PREMIUM_REF UMM ber
+            user_data = db.get_user(user_id)
+            if user_data and user_data.get('referred_by'):
+                referrer_id = user_data['referred_by']
+                db.add_umm(referrer_id, UMM_PER_PREMIUM_REF)
+                db.add_referral(referrer_id, user_id, "premium", UMM_PER_PREMIUM_REF)
+                try:
+                    await context.bot.send_message(
+                        referrer_id,
+                        f"🎉 Do'stingiz Premium oldi!\n💎 Sizga *+{UMM_PER_PREMIUM_REF} UMM* berildi!",
+                        parse_mode="Markdown"
+                    )
+                except:
+                    pass
+            await query.edit_message_text(
+                f"🎉 *Tabriklaymiz!*\n\n"
+                f"⚡ *1 oy Premium faollashtirildi!*\n"
+                f"💎 {UMM_FOR_PREMIUM} UMM sarflandi.",
+                parse_mode="Markdown"
+            )
+        else:
+            await query.edit_message_text("❌ UMM yetarli emas!")
+    else:
+        await query.edit_message_text(f"❌ UMM yetarli emas! Kerak: {UMM_FOR_PREMIUM}")
+
+async def buy_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    prices = {"buy_1": "100,000", "buy_3": "250,000", "buy_12": "800,000"}
+    months = {"buy_1": "1 oy", "buy_3": "3 oy", "buy_12": "1 yil"}
+    data = query.data
+    await query.edit_message_text(
+        f"⚡ *{months[data]} Premium*\n\n"
+        f"Narxi: *{prices[data]} so'm*\n\n"
+        f"💳 Karta: `8600 0000 0000 0000`\n\n"
+        f"To'lovdan so'ng chekni yuboring: @biolog_UMM",
+        parse_mode="Markdown"
+    )
+
+async def loyihalar_new(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "🎯 *Loyihalar*\n\nQaysi bo'limga kirishni xohlaysiz?",
+        parse_mode="Markdown",
+        reply_markup=loyihalar_keyboard_new()
+    )
+
+async def test_xizmati(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "📝 *Test xizmati*\n\nNimani qilmoqchisiz?",
+        parse_mode="Markdown",
+        reply_markup=test_xizmati_keyboard()
+    )
 
 async def nazariya(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -618,31 +880,65 @@ async def admin_boglanish(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # MAVZU KONTENTINI KO'RSATISH
 # ========================
 
+async def send_content_item(message, item):
+    caption = item.get("caption") or ""
+    try:
+        if item["content_type"] == "video":
+            await message.reply_video(video=item["file_id"], caption=caption)
+        elif item["content_type"] == "document":
+            await message.reply_document(document=item["file_id"], caption=caption)
+        elif item["content_type"] == "photo":
+            await message.reply_photo(photo=item["file_id"], caption=caption)
+        elif item["content_type"] == "text":
+            await message.reply_text(item["file_id"], parse_mode="Markdown")
+    except Exception as e:
+        logger.error(f"Kontent yuborishda xato: {e}")
+
 async def show_section(update: Update, context: ContextTypes.DEFAULT_TYPE, section_key: str):
     section_name = SECTIONS.get(section_key, section_key)
+    user_id = update.effective_user.id
+    is_prem = db.is_premium(user_id)
     contents = db.get_content(section_key)
 
     if not contents:
         await update.message.reply_text(
-            f"{section_name}\n\n📭 Hozircha kontent qo'shilmagan.\nTez orada qo'shiladi! ⏳"
+            f"*{section_name}*\n\n📭 Hozircha kontent qo'shilmagan.\nTez orada qo'shiladi! ⏳",
+            parse_mode="Markdown"
         )
         return
 
-    await update.message.reply_text(f"*{section_name}* bo'yicha materiallar 👇", parse_mode="Markdown")
+    # Bepul va pullik kontentlarni ajratish (is_free ustuniga qarab)
+    free_items = [c for c in contents if c.get("is_free", 1) == 1]
+    paid_items = [c for c in contents if c.get("is_free", 1) == 0]
 
-    for item in contents:
-        caption = item.get("caption") or ""
-        try:
-            if item["content_type"] == "video":
-                await update.message.reply_video(video=item["file_id"], caption=caption)
-            elif item["content_type"] == "document":
-                await update.message.reply_document(document=item["file_id"], caption=caption)
-            elif item["content_type"] == "photo":
-                await update.message.reply_photo(photo=item["file_id"], caption=caption)
-            elif item["content_type"] == "text":
-                await update.message.reply_text(item["file_id"], parse_mode="Markdown")
-        except Exception as e:
-            logger.error(f"Kontent yuborishda xato: {e}")
+    await update.message.reply_text(
+        f"*{section_name}* bo'yicha materiallar 👇",
+        parse_mode="Markdown"
+    )
+
+    # Bepul kontentlar — hammaga ko'rinadi
+    for item in free_items:
+        await send_content_item(update.message, item)
+
+    # Pullik kontentlar — faqat premiumga
+    if paid_items:
+        if is_prem:
+            await update.message.reply_text("⚡ *Premium materiallar:*", parse_mode="Markdown")
+            for item in paid_items:
+                await send_content_item(update.message, item)
+        else:
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("⚡ Premium olish", callback_data="buy_1")],
+            ])
+            await update.message.reply_text(
+                f"🔒 *Bu bo'limda yana {len(paid_items)} ta premium material bor!*\n\n"
+                "Barchasini ko'rish uchun *Premium* oling 👇",
+                parse_mode="Markdown",
+                reply_markup=keyboard
+            )
+
+    if not free_items and not paid_items:
+        await update.message.reply_text("📭 Hozircha kontent yo'q.")
 
 # ========================
 # ADMIN PANEL
@@ -717,6 +1013,44 @@ async def admin_test_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text += f"📝 *{t['title']}* | Kod: `{t['code']}` | {t['question_count']} ta savol\n"
         keyboard.append([InlineKeyboardButton(f"🗑 {t['code']} o'chirish", callback_data=f"del_test_{t['code']}")])
     await update.message.reply_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
+
+async def admin_premium_ber_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Foydalanish: /premium_ber <user_id>"""
+    if not is_admin(update.effective_user.id):
+        return
+    args = context.args
+    if not args:
+        await update.message.reply_text("Foydalanish: /premium_ber <user_id>")
+        return
+    try:
+        uid = int(args[0])
+        db.set_premium(uid, True)
+        await update.message.reply_text(f"✅ {uid} ga Premium berildi!")
+        try:
+            await context.bot.send_message(uid, "🎉 *Premium faollashtirildi!*\n\nBarcha materiallar ochiq!", parse_mode="Markdown")
+        except:
+            pass
+    except Exception as e:
+        await update.message.reply_text(f"Xato: {e}")
+
+async def admin_balans_ber_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Foydalanish: /balans_ber <user_id> <miqdor>"""
+    if not is_admin(update.effective_user.id):
+        return
+    args = context.args
+    if len(args) != 2:
+        await update.message.reply_text("Foydalanish: /balans_ber <user_id> <miqdor>")
+        return
+    try:
+        uid, amount = int(args[0]), int(args[1])
+        db.add_balance(uid, amount)
+        await update.message.reply_text(f"✅ {uid} ga {amount} so'm qo'shildi!")
+        try:
+            await context.bot.send_message(uid, f"💰 Balansingizga *{amount} so'm* qo'shildi!", parse_mode="Markdown")
+        except:
+            pass
+    except Exception as e:
+        await update.message.reply_text(f"Xato: {e}")
 
 async def admin_video_qosh(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
@@ -1807,25 +2141,34 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cap = msg.caption or ""
 
         if msg.video:
-            db.add_content(section, "video", msg.video.file_id, cap, user_id)
-            ctype = "🎥 Video"
+            context.user_data["pending_file_id"] = msg.video.file_id
+            context.user_data["pending_type"] = "video"
+            context.user_data["pending_caption"] = cap
         elif msg.document:
-            db.add_content(section, "document", msg.document.file_id, cap, user_id)
-            ctype = "📄 Fayl"
+            context.user_data["pending_file_id"] = msg.document.file_id
+            context.user_data["pending_type"] = "document"
+            context.user_data["pending_caption"] = cap
         elif msg.photo:
-            db.add_content(section, "photo", msg.photo[-1].file_id, cap, user_id)
-            ctype = "🖼 Rasm"
-        elif text:
-            db.add_content(section, "text", text, "", user_id)
-            ctype = "📝 Matn"
+            context.user_data["pending_file_id"] = msg.photo[-1].file_id
+            context.user_data["pending_type"] = "photo"
+            context.user_data["pending_caption"] = cap
+        elif text and text != "◀️ Bekor qilish":
+            context.user_data["pending_file_id"] = text
+            context.user_data["pending_type"] = "text"
+            context.user_data["pending_caption"] = ""
         else:
             await update.message.reply_text("❌ Faqat video, fayl, rasm yoki matn yuboring.")
             return
 
-        context.user_data.clear()
+        context.user_data["action"] = "add_content_free_or_paid"
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🆓 Bepul", callback_data="content_free"),
+             InlineKeyboardButton("💎 Pullik (premium)", callback_data="content_paid")]
+        ])
         await update.message.reply_text(
-            f"✅ *{ctype} qo'shildi!*\nBo'lim: {SECTIONS.get(section, section)}",
-            parse_mode="Markdown", reply_markup=admin_keyboard()
+            "Bu kontent *bepulmi* yoki *pullik* (premium)?",
+            parse_mode="Markdown",
+            reply_markup=keyboard
         )
         return
 
@@ -1855,16 +2198,36 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ── ASOSIY TUGMALAR ──
     main_handlers = {
-        "📚 Nazariya uchun tayyorgarlik": nazariya,
-        "📝 DTM testlar": dtm_testlar,
-        "🔥 DTM 30-TALIK TEST ISHLASH 🔥": dtm_30_test,
-        "✅ DTM Test tekshirish": test_tekshirish,
-        "🏅 MS Test tekshirish": ms_test_tekshirish,
+        # Asosiy 4 tugma
+        "👤 Shaxsiy kabinet": shaxsiy_kabinet,
+        "🎯 Loyihalar": loyihalar_new,
+        "🔥 DTM 30 Testlar": dtm_30_test,
+        "📝 Test xizmati": test_xizmati,
+        "👨‍🏫 O'qituvchi haqida": o_qituvchi,
+        
+        # Kabinet
+        "💰 Balansim": balansim,
+        "💎 UMM tangalarim": umm_tangalarim,
+        "🎁 UMM bilan premium olish": umm_premium_olish,
+        "➕ Balans to'ldirish": balans_toldirish,
+        "⚡ Pullik kurs sotib olish": pullik_kurs_sotib_olish,
+        # Test xizmati
+        "✅ DTM test tekshirish": test_tekshirish,
+        "🏅 MS test tekshirish": ms_test_tekshirish,
         "👨‍🏫 O'qituvchi paneli": teacher_panel,
+        # Loyihalar
+        "📚 Nazariya uchun tayyorgarlik": nazariya,
+        "🔬 Masala — noldan boshlash": masala_noldan,
+        "🏆 Masala — sertifikat darajasi": masala_sertifikat,
+        "📝 DTM testlar arxivi": dtm_testlar,
+        # O'qituvchi
         "➕ Test yaratish": teacher_create_test,
         "➕ MS Test yaratish": teacher_create_ms_test,
         "📋 Mening testlarim": teacher_my_tests,
         "🗑 Testni o'chirish": teacher_delete_test_start,
+        # DTM
+        "📝 DTM testlar": dtm_testlar,
+        "🔥 DTM 30-TALIK TEST ISHLASH 🔥": dtm_30_test,
         "📅 Yillar bo'yicha DTM testlar": dtm_yillar,
         "🔬 Mavzular bo'yicha DTM testlar": dtm_mavzular,
         "📖 Nazariy mavzular darsi": nazariy_dars,
@@ -1939,6 +2302,33 @@ async def watch_video_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     except Exception as e:
         await query.answer("Video yuborishda xato!", show_alert=True)
 
+async def content_free_paid_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    if not is_admin(query.from_user.id):
+        return
+
+    is_free = 1 if query.data == "content_free" else 0
+    section = context.user_data.get("section")
+    file_id = context.user_data.get("pending_file_id")
+    ctype = context.user_data.get("pending_type")
+    cap = context.user_data.get("pending_caption", "")
+    user_id = query.from_user.id
+
+    db.add_content(section, ctype, file_id, cap, user_id, is_free=is_free)
+
+    label = "🆓 Bepul" if is_free else "💎 Pullik"
+    type_labels = {"video": "🎥 Video", "document": "📄 Fayl", "photo": "🖼 Rasm", "text": "📝 Matn"}
+    ctype_label = type_labels.get(ctype, ctype)
+
+    context.user_data.clear()
+    await query.edit_message_text(
+        f"✅ *{ctype_label} qo'shildi!*\n"
+        f"Bo'lim: {SECTIONS.get(section, section)}\n"
+        f"Tur: {label}",
+        parse_mode="Markdown"
+    )
+
 async def del_teacher_test_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -1984,6 +2374,9 @@ def main():
     app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(CommandHandler("admin_qosh", admin_qosh_cmd))
     app.add_handler(CommandHandler("admin_ochi", admin_ochi_cmd))
+    app.add_handler(CallbackQueryHandler(buy_callback, pattern="^buy_"))
+    app.add_handler(CallbackQueryHandler(umm_buy_callback, pattern="^umm_buy_premium"))
+    app.add_handler(CallbackQueryHandler(content_free_paid_callback, pattern="^content_"))
     app.add_handler(CallbackQueryHandler(delete_callback, pattern="^del_"))
     app.add_handler(CallbackQueryHandler(test_callback, pattern="^(q_|ans_|check_result|reset_answers|back_to_answers)"))
     app.add_handler(CallbackQueryHandler(ms_test_callback, pattern="^(ms_|msans_)"))
@@ -1994,6 +2387,8 @@ def main():
     app.add_handler(CommandHandler("test_qosh", admin_test_qosh))
     app.add_handler(CommandHandler("testlar", admin_test_list))
     app.add_handler(CommandHandler("video_qosh", admin_video_qosh))
+    app.add_handler(CommandHandler("premium_ber", admin_premium_ber_cmd))
+    app.add_handler(CommandHandler("balans_ber", admin_balans_ber_cmd))
     app.add_handler(MessageHandler(
         (filters.TEXT | filters.VIDEO | filters.Document.ALL | filters.PHOTO) & ~filters.COMMAND,
         handle_message
