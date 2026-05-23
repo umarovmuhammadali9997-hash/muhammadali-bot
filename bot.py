@@ -103,7 +103,7 @@ def noldan_keyboard():
 
 def admin_keyboard():
     return ReplyKeyboardMarkup([
-        [KeyboardButton("🔥 DTM30: Yangi test qo'shish")],
+        [KeyboardButton("🔥 DTM30: Yangi test qo'shish"), KeyboardButton("🗑 DTM30: Test o'chirish")],
         [KeyboardButton("➕ Kontent qo'shish"), KeyboardButton("🗑 Kontent o'chirish")],
         [KeyboardButton("📋 Testlar"), KeyboardButton("➕ Test qo'shish")],
         [KeyboardButton("📊 Test natijalari")],
@@ -1035,6 +1035,28 @@ async def admin_statistika(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
+async def dtm30_delete_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        return
+    all_tests = db.get_all_tests()
+    dtm_tests = [t for t in all_tests if t.get("question_count") == 30]
+    if not dtm_tests:
+        await update.message.reply_text("📭 DTM 30 testlar yo'q.", reply_markup=admin_keyboard())
+        return
+    keyboard = []
+    for t in dtm_tests:
+        video = db.get_test_video(t["code"])
+        video_icon = "🎬" if video else "❌"
+        keyboard.append([InlineKeyboardButton(
+            f"🗑 {t['title']} {video_icon}",
+            callback_data=f"del_dtm30_{t['code']}"
+        )])
+    await update.message.reply_text(
+        "🗑 *DTM 30 test o'chirish*\n\nQaysi testni o'chirmoqchisiz?\n_(🎬 = video bor | ❌ = video yo'q)_",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
 async def dtm30_admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
         return
@@ -1060,14 +1082,17 @@ async def kontent_ochi_start(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if not is_admin(update.effective_user.id):
         return
 
-    # Bazadan kontent bor bo'limlarni olish
-    import sqlite3
-    with db.connect() as conn:
-        rows = conn.execute(
-            "SELECT section, COUNT(*) as cnt FROM content GROUP BY section ORDER BY section"
-        ).fetchall()
+    # Barcha bo'limlardan kontent borlarini topish
+    non_empty = []
+    for key in SECTIONS:
+        try:
+            items = db.get_content(key)
+            if items:
+                non_empty.append((key, SECTIONS[key], len(items)))
+        except:
+            pass
 
-    if not rows:
+    if not non_empty:
         await update.message.reply_text(
             "📭 Hech bir bo'limda kontent yo'q.",
             reply_markup=admin_keyboard()
@@ -1075,13 +1100,10 @@ async def kontent_ochi_start(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
 
     keyboard = []
-    for row in rows:
-        section_key = row[0]
-        count = row[1]
-        name = SECTIONS.get(section_key, section_key)
+    for key, name, count in non_empty:
         keyboard.append([InlineKeyboardButton(
             f"{name} ({count} ta)",
-            callback_data=f"del_section_{section_key}"
+            callback_data=f"del_section_{key}"
         )])
 
     await update.message.reply_text(
@@ -2494,6 +2516,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📋 Testlar": admin_test_list,
         "➕ Kontent qo'shish": kontent_qosh_start,
         "🔥 DTM30: Yangi test qo'shish": dtm30_admin_start,
+        "🗑 DTM30: Test o'chirish": dtm30_delete_start,
         "🗑 Kontent o'chirish": kontent_ochi_start,
         "📊 Statistika": admin_statistika,
         "👥 Adminlar": adminlar,
@@ -2619,6 +2642,29 @@ async def del_section_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
+async def del_dtm30_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    if not is_admin(query.from_user.id):
+        return
+    code = query.data.replace("del_dtm30_", "")
+    test = db.get_test(code)
+    if not test:
+        await query.edit_message_text("❌ Test topilmadi.")
+        return
+    # Test va videoni o'chirish
+    db.delete_test(code)
+    try:
+        with db.connect() as conn:
+            conn.execute("DELETE FROM test_videos WHERE test_code=?", (code,))
+            conn.commit()
+    except:
+        pass
+    await query.edit_message_text(
+        f"✅ *{test['title']}* o'chirildi!\n(Test va video yechim ham o'chirildi)",
+        parse_mode="Markdown"
+    )
+
 async def del_teacher_test_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -2633,22 +2679,25 @@ async def del_teacher_test_callback(update: Update, context: ContextTypes.DEFAUL
 async def del_section_back_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    import sqlite3
-    with db.connect() as conn:
-        rows = conn.execute(
-            "SELECT section, COUNT(*) as cnt FROM content GROUP BY section ORDER BY section"
-        ).fetchall()
-    if not rows:
+
+    non_empty = []
+    for key in SECTIONS:
+        try:
+            items = db.get_content(key)
+            if items:
+                non_empty.append((key, SECTIONS[key], len(items)))
+        except:
+            pass
+
+    if not non_empty:
         await query.edit_message_text("📭 Hech bir bo'limda kontent yo'q.")
         return
+
     keyboard = []
-    for row in rows:
-        section_key = row[0]
-        count = row[1]
-        name = SECTIONS.get(section_key, section_key)
+    for key, name, count in non_empty:
         keyboard.append([InlineKeyboardButton(
             f"{name} ({count} ta)",
-            callback_data=f"del_section_{section_key}"
+            callback_data=f"del_section_{key}"
         )])
     await query.edit_message_text(
         "🗑 *Kontent o'chirish*\n\nQaysi bo'limdan o'chirmoqchisiz?",
@@ -2698,6 +2747,7 @@ def main():
     app.add_handler(CallbackQueryHandler(test_callback, pattern="^(q_|ans_|check_result|reset_answers|back_to_answers)"))
     app.add_handler(CallbackQueryHandler(ms_test_callback, pattern="^(ms_|msans_)"))
     app.add_handler(CallbackQueryHandler(del_test_callback, pattern="^del_test_"))
+    app.add_handler(CallbackQueryHandler(del_dtm30_callback, pattern="^del_dtm30_"))
     app.add_handler(CallbackQueryHandler(del_section_back_callback, pattern="^del_section_back$"))
     app.add_handler(CallbackQueryHandler(del_section_callback, pattern="^del_section_(?!back)"))
     app.add_handler(CallbackQueryHandler(dtm30_select_callback, pattern="^dtm30_"))
