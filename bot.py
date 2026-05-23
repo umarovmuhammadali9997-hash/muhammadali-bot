@@ -1060,31 +1060,32 @@ async def kontent_ochi_start(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if not is_admin(update.effective_user.id):
         return
 
-    # Faqat kontent bor bo'limlarni ko'rsatish
-    from config import SECTIONS
-    non_empty = []
-    for key, name in SECTIONS.items():
-        items = db.get_content(key)
-        if items:
-            non_empty.append((key, name, len(items)))
+    # Bazadan kontent bor bo'limlarni olish
+    import sqlite3
+    with db.connect() as conn:
+        rows = conn.execute(
+            "SELECT section, COUNT(*) as cnt FROM content GROUP BY section ORDER BY section"
+        ).fetchall()
 
-    if not non_empty:
+    if not rows:
         await update.message.reply_text(
             "📭 Hech bir bo'limda kontent yo'q.",
             reply_markup=admin_keyboard()
         )
         return
 
-    # Inline tugmalar - faqat kontentli bo'limlar
     keyboard = []
-    for key, name, count in non_empty:
+    for row in rows:
+        section_key = row[0]
+        count = row[1]
+        name = SECTIONS.get(section_key, section_key)
         keyboard.append([InlineKeyboardButton(
             f"{name} ({count} ta)",
-            callback_data=f"del_section_{key}"
+            callback_data=f"del_section_{section_key}"
         )])
 
     await update.message.reply_text(
-        "🗑 *Kontent o'chirish*\n\nQaysi bo'limdan o'chirmoqchisiz?\n_(Faqat kontent bor bo'limlar ko'rsatildi)_",
+        "🗑 *Kontent o'chirish*\n\nQaysi bo'limdan o'chirmoqchisiz?",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
@@ -2632,21 +2633,22 @@ async def del_teacher_test_callback(update: Update, context: ContextTypes.DEFAUL
 async def del_section_back_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    # Kontent bor bo'limlarni qayta ko'rsatish
-    from config import SECTIONS
-    non_empty = []
-    for key, name in SECTIONS.items():
-        items = db.get_content(key)
-        if items:
-            non_empty.append((key, name, len(items)))
-    if not non_empty:
+    import sqlite3
+    with db.connect() as conn:
+        rows = conn.execute(
+            "SELECT section, COUNT(*) as cnt FROM content GROUP BY section ORDER BY section"
+        ).fetchall()
+    if not rows:
         await query.edit_message_text("📭 Hech bir bo'limda kontent yo'q.")
         return
     keyboard = []
-    for key, name, count in non_empty:
+    for row in rows:
+        section_key = row[0]
+        count = row[1]
+        name = SECTIONS.get(section_key, section_key)
         keyboard.append([InlineKeyboardButton(
             f"{name} ({count} ta)",
-            callback_data=f"del_section_{key}"
+            callback_data=f"del_section_{section_key}"
         )])
     await query.edit_message_text(
         "🗑 *Kontent o'chirish*\n\nQaysi bo'limdan o'chirmoqchisiz?",
