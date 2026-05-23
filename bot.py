@@ -1059,10 +1059,34 @@ async def kontent_qosh_start(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def kontent_ochi_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
         return
-    context.user_data["action"] = "delete_content_section"
+
+    # Faqat kontent bor bo'limlarni ko'rsatish
+    from config import SECTIONS
+    non_empty = []
+    for key, name in SECTIONS.items():
+        items = db.get_content(key)
+        if items:
+            non_empty.append((key, name, len(items)))
+
+    if not non_empty:
+        await update.message.reply_text(
+            "📭 Hech bir bo'limda kontent yo'q.",
+            reply_markup=admin_keyboard()
+        )
+        return
+
+    # Inline tugmalar - faqat kontentli bo'limlar
+    keyboard = []
+    for key, name, count in non_empty:
+        keyboard.append([InlineKeyboardButton(
+            f"{name} ({count} ta)",
+            callback_data=f"del_section_{key}"
+        )])
+
     await update.message.reply_text(
-        "🗑 *Kontent o'chirish*\n\nQaysi bo'limdan o'chirmoqchisiz?",
-        parse_mode="Markdown", reply_markup=sections_keyboard()
+        "🗑 *Kontent o'chirish*\n\nQaysi bo'limdan o'chirmoqchisiz?\n_(Faqat kontent bor bo'limlar ko'rsatildi)_",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 async def admin_test_qosh(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1250,7 +1274,7 @@ def build_ms_abcd_keyboard(q_num: int):
 
 async def dtm_30_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """DTM 30-talik testlar ro'yxatini ko'rsatish"""
-    # Barcha 30 savollik testlarni olish
+    user_id = update.effective_user.id
     all_tests = db.get_all_tests()
     dtm_tests = [t for t in all_tests if t.get("question_count") == 30]
 
@@ -1264,16 +1288,27 @@ async def dtm_30_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+    # Foydalanuvchining oxirgi natijalarini ko'rsatish
+    my_results = db.get_user_test_results(user_id, limit=3)
+    results_text = ""
+    if my_results:
+        results_text = "\n📊 *Sizning oxirgi natijalaringiz:*\n"
+        for r in my_results:
+            emoji = "🥇" if r["percentage"] >= 90 else "🥈" if r["percentage"] >= 70 else "🥉" if r["percentage"] >= 50 else "📚"
+            results_text += f"{emoji} {r['test_code']}: *{r['correct']}/30* — {r['percentage']}%\n"
+        results_text += "\n"
+
     keyboard = []
     for t in dtm_tests:
-        keyboard.append([InlineKeyboardButton(
-            f"📝 {t['title']}",
-            callback_data=f"dtm30_{t['code']}"
-        )])
+        # Foydalanuvchi bu testni ishlagan bo'lsa belgilansin
+        done = any(r['test_code'] == t['code'] for r in my_results)
+        label = f"✅ {t['title']}" if done else f"📝 {t['title']}"
+        keyboard.append([InlineKeyboardButton(label, callback_data=f"dtm30_{t['code']}")])
 
     await update.message.reply_text(
         "🔥 *DTM 30-TALIK TESTLAR*\n\n"
-        "Test ishlash uchun tanlang 👇\n\n"
+        "Test ishlash uchun tanlang 👇\n"
+        f"{results_text}"
         f"📊 Jami: *{len(dtm_tests)} ta test*",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(keyboard)
@@ -2556,6 +2591,33 @@ async def content_free_paid_callback(update: Update, context: ContextTypes.DEFAU
         parse_mode="Markdown"
     )
 
+async def del_section_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    if not is_admin(query.from_user.id):
+        return
+    section = query.data.replace("del_section_", "")
+    contents = db.get_content(section)
+    if not contents:
+        await query.edit_message_text("📭 Bu bo'limda kontent yo'q.")
+        return
+    from config import SECTIONS
+    section_name = SECTIONS.get(section, section)
+    keyboard = []
+    for item in contents:
+        label = f"[{item['id']}] {item['content_type'].upper()} — {item['caption'][:25] if item['caption'] else '(izohsiz)'}"
+        is_free = "🆓" if item.get("is_free", 1) == 1 else "💎"
+        keyboard.append([InlineKeyboardButton(
+            f"{is_free} {label}",
+            callback_data=f"del_{item['id']}"
+        )])
+    keyboard.append([InlineKeyboardButton("◀️ Orqaga", callback_data="del_section_back")])
+    await query.edit_message_text(
+        f"🗑 *{section_name}* — o'chirish uchun tanlang:",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
 async def del_teacher_test_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -2566,6 +2628,31 @@ async def del_teacher_test_callback(update: Update, context: ContextTypes.DEFAUL
     code = query.data.replace("del_ttest_", "")
     db.delete_teacher_test(code, user_id)
     await query.edit_message_text(f"✅ *{code}* testi o'chirildi!", parse_mode="Markdown")
+
+async def del_section_back_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    # Kontent bor bo'limlarni qayta ko'rsatish
+    from config import SECTIONS
+    non_empty = []
+    for key, name in SECTIONS.items():
+        items = db.get_content(key)
+        if items:
+            non_empty.append((key, name, len(items)))
+    if not non_empty:
+        await query.edit_message_text("📭 Hech bir bo'limda kontent yo'q.")
+        return
+    keyboard = []
+    for key, name, count in non_empty:
+        keyboard.append([InlineKeyboardButton(
+            f"{name} ({count} ta)",
+            callback_data=f"del_section_{key}"
+        )])
+    await query.edit_message_text(
+        "🗑 *Kontent o'chirish*\n\nQaysi bo'limdan o'chirmoqchisiz?",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
 
 async def del_test_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -2609,6 +2696,8 @@ def main():
     app.add_handler(CallbackQueryHandler(test_callback, pattern="^(q_|ans_|check_result|reset_answers|back_to_answers)"))
     app.add_handler(CallbackQueryHandler(ms_test_callback, pattern="^(ms_|msans_)"))
     app.add_handler(CallbackQueryHandler(del_test_callback, pattern="^del_test_"))
+    app.add_handler(CallbackQueryHandler(del_section_callback, pattern="^del_section_"))
+    app.add_handler(CallbackQueryHandler(del_section_back_callback, pattern="^del_section_back"))
     app.add_handler(CallbackQueryHandler(dtm30_select_callback, pattern="^dtm30_"))
     app.add_handler(CallbackQueryHandler(watch_video_callback, pattern="^watch_video_"))
     app.add_handler(CallbackQueryHandler(del_teacher_test_callback, pattern="^del_ttest_"))

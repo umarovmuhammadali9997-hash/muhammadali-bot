@@ -477,6 +477,18 @@ class Database:
             )
             conn.commit()
 
+    def get_user_test_results(self, user_id, limit=5):
+        """Foydalanuvchining oxirgi test natijalarini olish"""
+        with self.connect() as conn:
+            conn.row_factory = sqlite3.Row
+            try:
+                return [dict(r) for r in conn.execute(
+                    "SELECT * FROM test_results WHERE user_id=? ORDER BY created_at DESC LIMIT ?",
+                    (user_id, limit)
+                ).fetchall()]
+            except:
+                return []
+
     def get_test_results(self, test_code=None, teacher_id=None):
         with self.connect() as conn:
             conn.row_factory = sqlite3.Row
