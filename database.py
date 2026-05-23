@@ -98,6 +98,14 @@ class Database:
         self.create_teacher_tables()
 
     # ── USERS ──
+    def get_user(self, user_id):
+        with self.connect() as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT * FROM users WHERE user_id=?", (user_id,)
+            ).fetchone()
+            return dict(row) if row else None
+
     def add_user(self, user_id, full_name, username):
         """Foydalanuvchini qo'shadi. True qaytarsa — yangi foydalanuvchi."""
         with self.connect() as conn:
