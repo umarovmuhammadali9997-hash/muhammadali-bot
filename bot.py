@@ -2236,36 +2236,27 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if action == "dtm30_admin_step3":
-        # Test PDF (savollar)
+        # PDF yuklash
         msg = update.message
         if text and text == "◀️ Bekor qilish":
             context.user_data.clear()
             await update.message.reply_text("Bekor qilindi.", reply_markup=admin_keyboard())
             return
-        if msg.document:
-            context.user_data["dtm30_pdf"] = msg.document.file_id
-            context.user_data["action"] = "dtm30_admin_step4"
+        if not msg.document:
             await update.message.reply_text(
-                "✅ Test savollari saqlandi!\n\n"
-                "4-qadam: Kalit javoblarini yozing\n"
-                "_(30 ta, vergul bilan: A,B,C,D,A,B,...)_",
+                "📄 Test savollari PDF faylini yuboring:",
                 parse_mode="Markdown"
             )
-        elif text and text.lower() in ["yo'q", "yoq"]:
-            context.user_data["dtm30_pdf"] = None
-            context.user_data["action"] = "dtm30_admin_step4"
-            await update.message.reply_text(
-                "✅ PDF o'tkazib yuborildi.\n\n"
-                "4-qadam: Kalit javoblarini yozing\n"
-                "_(30 ta, vergul bilan: A,B,C,D,A,B,...)_",
-                parse_mode="Markdown"
-            )
-        else:
-            await update.message.reply_text(
-                "📄 Test savollari PDF faylini yuboring\n"
-                "_(yoki 'yo'q' deb yozing)_",
-                parse_mode="Markdown"
-            )
+            return
+        context.user_data["dtm30_pdf"] = msg.document.file_id
+        context.user_data["action"] = "dtm30_admin_step4"
+        await update.message.reply_text(
+            "✅ *PDF yuklandi!*\n\n"
+            "Endi kalit javoblarini yuboring.\n\n"
+            "📌 *Namuna (30 ta, vergul bilan):*\n"
+            "`A,B,C,D,A,B,C,D,A,B,C,D,A,B,C,D,A,B,C,D,A,B,C,D,A,B,C,D,A,B`",
+            parse_mode="Markdown"
+        )
         return
 
     if action == "dtm30_admin_step4":
@@ -2274,41 +2265,38 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data.clear()
             await update.message.reply_text("Bekor qilindi.", reply_markup=admin_keyboard())
             return
+        if not text:
+            return
         ans_list = [a.strip() for a in text.split(",")]
         if len(ans_list) != 30:
             await update.message.reply_text(
-                f"❌ *{len(ans_list)} ta kalit* kiritdingiz, *30 ta* kerak!\n"
-                "Qayta kiriting.",
+                f"❌ *{len(ans_list)} ta kalit* kiritdingiz, *30 ta* kerak!\n\n"
+                "📌 *Namuna:*\n"
+                "`A,B,C,D,A,B,C,D,A,B,C,D,A,B,C,D,A,B,C,D,A,B,C,D,A,B,C,D,A,B`\n\n"
+                "Qayta yuboring:",
                 parse_mode="Markdown"
             )
             return
         context.user_data["dtm30_answers"] = text
         context.user_data["action"] = "dtm30_admin_step5"
         await update.message.reply_text(
-            "✅ Kalit javoblar saqlandi!\n\n"
-            "5-qadam: Video yechimni yuboring\n"
-            "_(Test ishlagan o'quvchi natijadan keyin shu videoni ko'radi)_\n"
-            "_(Video bo'lmasa 'yo'q' deb yozing)_",
+            "✅ *Kalit saqlandi!*\n\n"
+            "Endi video tahlilni yuboring:\n"
+            "_(O'quvchi test natijasini ko'rgandan so'ng bu video avtomatik yuboriladi)_",
             parse_mode="Markdown"
         )
         return
 
     if action == "dtm30_admin_step5":
-        # Video yechim
+        # Video tahlil
         msg = update.message
         if text and text == "◀️ Bekor qilish":
             context.user_data.clear()
             await update.message.reply_text("Bekor qilindi.", reply_markup=admin_keyboard())
             return
-        video_id = None
-        if msg.video:
-            video_id = msg.video.file_id
-        elif text and text.lower() in ["yo'q", "yoq"]:
-            video_id = None
-        else:
+        if not msg.video:
             await update.message.reply_text(
-                "🎬 Video yechim faylini yuboring\n"
-                "_(yoki 'yo'q' deb yozing)_",
+                "🎬 Video tahlil faylini yuboring:",
                 parse_mode="Markdown"
             )
             return
@@ -2318,19 +2306,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         title = context.user_data.get("dtm30_title")
         answers = context.user_data.get("dtm30_answers")
         pdf_id = context.user_data.get("dtm30_pdf")
+        video_id = msg.video.file_id
 
         db.add_teacher_test(code, title, pdf_id, answers, 30, user_id)
-        if video_id:
-            db.add_test_video(code, video_id, f"{title} — Video yechim", user_id)
+        db.add_test_video(code, video_id, f"{title} — Video tahlil", user_id)
 
         context.user_data.clear()
         await update.message.reply_text(
-            f"✅ *DTM 30-talik test qo'shildi!*\n\n"
-            f"📝 Sarlavha: *{title}*\n"
-            f"🔑 Kod: `{code}`\n"
-            f"📋 Savollar: {'✅' if pdf_id else '❌'}\n"
-            f"🎬 Video yechim: {'✅' if video_id else '❌'}\n\n"
-            f"Foydalanuvchilar 🔥 DTM 30 Testlar bo'limida ko'radi!",
+            f"🎉 *Variant muvaffaqiyatli yuklandi!*\n\n"
+            f"📋 *{title}*\n"
+            f"📄 PDF fayli: ✅\n"
+            f"🔑 Kaliti: ✅\n"
+            f"🎬 Video tahlili: ✅\n\n"
+            f"Endi bu variantni foydalanuvchilarga tadbiq etishingiz mumkin!\n"
+            f"U 🔥 *DTM 30 Testlar* bo'limida ko'rinadi.",
             parse_mode="Markdown",
             reply_markup=admin_keyboard()
         )
