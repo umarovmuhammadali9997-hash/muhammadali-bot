@@ -2743,7 +2743,7 @@ def main():
     app.add_handler(CallbackQueryHandler(pay_card_ref_callback, pattern="^pay_"))
     app.add_handler(CallbackQueryHandler(umm_buy_callback, pattern="^umm_buy_premium"))
     app.add_handler(CallbackQueryHandler(content_free_paid_callback, pattern="^content_"))
-    app.add_handler(CallbackQueryHandler(delete_callback, pattern="^del_"))
+    app.add_handler(CallbackQueryHandler(delete_callback, pattern=r'^del_\d+$'))
     app.add_handler(CallbackQueryHandler(test_callback, pattern="^(q_|ans_|check_result|reset_answers|back_to_answers)"))
     app.add_handler(CallbackQueryHandler(ms_test_callback, pattern="^(ms_|msans_)"))
     app.add_handler(CallbackQueryHandler(del_test_callback, pattern="^del_test_"))
