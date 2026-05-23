@@ -2767,7 +2767,7 @@ def main():
     app.run_polling(
         poll_interval=0.5,
         timeout=30,
-        drop_pending_updates=True
+        drop_pending_updates=False
     )
 
 if __name__ == "__main__":
