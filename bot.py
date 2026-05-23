@@ -103,6 +103,7 @@ def noldan_keyboard():
 
 def admin_keyboard():
     return ReplyKeyboardMarkup([
+        [KeyboardButton("🔥 DTM30: Yangi test qo'shish")],
         [KeyboardButton("➕ Kontent qo'shish"), KeyboardButton("🗑 Kontent o'chirish")],
         [KeyboardButton("📋 Testlar"), KeyboardButton("➕ Test qo'shish")],
         [KeyboardButton("📊 Test natijalari")],
@@ -112,8 +113,6 @@ def admin_keyboard():
 
 def sections_keyboard():
     return ReplyKeyboardMarkup([
-        # ── DTM 30-talik testlar (test + video yechim) ──
-        [KeyboardButton("🔥 DTM30: Yangi test qo'shish")],
         # Nazariya
         [KeyboardButton("📖 Nazariy mavzular darsi")],
         [KeyboardButton("📝 Mavzular yuzasidan testlar")],
