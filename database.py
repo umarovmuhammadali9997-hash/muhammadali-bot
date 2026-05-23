@@ -106,6 +106,31 @@ class Database:
             ).fetchone()
             return dict(row) if row else None
 
+    def is_profile_complete(self, user_id):
+        """Foydalanuvchi profili to'ldirilganmi?"""
+        user = self.get_user(user_id)
+        if not user:
+            return False
+        return bool(user.get('full_name') and user.get('region') and 
+                   user.get('phone') and user.get('grade'))
+
+    def update_profile(self, user_id, full_name, region, phone, grade):
+        with self.connect() as conn:
+            try:
+                conn.execute("ALTER TABLE users ADD COLUMN region TEXT")
+            except: pass
+            try:
+                conn.execute("ALTER TABLE users ADD COLUMN phone TEXT")
+            except: pass
+            try:
+                conn.execute("ALTER TABLE users ADD COLUMN grade TEXT")
+            except: pass
+            conn.execute(
+                "UPDATE users SET full_name=?, region=?, phone=?, grade=? WHERE user_id=?",
+                (full_name, region, phone, grade, user_id)
+            )
+            conn.commit()
+
     def add_user(self, user_id, full_name, username):
         """Foydalanuvchini qo'shadi. True qaytarsa — yangi foydalanuvchi."""
         with self.connect() as conn:

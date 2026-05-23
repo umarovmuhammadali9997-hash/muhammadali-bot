@@ -6,6 +6,24 @@ from telegram.ext import (
 )
 from database import Database
 from config import BOT_TOKEN, SUPER_ADMINS, SECTIONS, SOCIAL_LINKS, UMM_PER_REFERRAL, UMM_PER_PREMIUM_REF, UMM_FOR_PREMIUM, PREMIUM_PRICES, BOT_USERNAME
+import re
+
+def validate_phone(phone: str) -> bool:
+    """O'zbek telefon raqamini tekshirish"""
+    phone = phone.strip().replace(" ", "").replace("-", "")
+    # +998901234567 yoki 998901234567 yoki 901234567
+    pattern = r'^(\+998|998)?[0-9]{9}$'
+    return bool(re.match(pattern, phone))
+
+def format_phone(phone: str) -> str:
+    """Telefon raqamini standart formatga keltirish"""
+    phone = phone.strip().replace(" ", "").replace("-", "")
+    if phone.startswith("+998"):
+        return phone
+    elif phone.startswith("998"):
+        return "+" + phone
+    else:
+        return "+998" + phone
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -274,6 +292,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         caption, parse_mode="Markdown", reply_markup=main_menu_keyboard()
     )
+
+    # Profil to'ldirilmagan bo'lsa so'rash
+    if is_new and not db.is_profile_complete(user.id):
+        context.user_data["action"] = "profile_name"
+        await update.message.reply_text(
+            "📋 *Bir marta ma'lumotlaringizni kiriting*\n\n"
+            "Bu ma'lumotlar test natijalaringizni saqlash uchun kerak.\n\n"
+            "1️⃣ To'liq ismingizni yozing:\n_(Masalan: Karimov Jasur)_",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup(
+                [[KeyboardButton("⏭ O'tkazib yuborish")]],
+                resize_keyboard=True
+            )
+        )
 
 # ========================
 # ASOSIY MENYULAR
@@ -1774,6 +1806,102 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+    # ── PROFIL TO'LDIRISH ──
+    if action == "profile_name":
+        if text == "⏭ O'tkazib yuborish":
+            context.user_data.clear()
+            await update.message.reply_text(
+                "Yaxshi! Keyin ham to'ldirishingiz mumkin.",
+                reply_markup=main_menu_keyboard()
+            )
+            return
+        context.user_data["p_name"] = text
+        context.user_data["action"] = "profile_region"
+        await update.message.reply_text(
+            f"✅ Ism: *{text}*\n\n"
+            "2️⃣ Qayerdan ekansiz? (Viloyat/Tuman):\n"
+            "_(Masalan: Toshkent sh., Farg'ona v.)_",
+            parse_mode="Markdown"
+        )
+        return
+
+    if action == "profile_region":
+        if text == "⏭ O'tkazib yuborish":
+            context.user_data.clear()
+            await update.message.reply_text("Yaxshi!", reply_markup=main_menu_keyboard())
+            return
+        context.user_data["p_region"] = text
+        context.user_data["action"] = "profile_phone"
+        await update.message.reply_text(
+            f"✅ Joylashuv: *{text}*\n\n"
+            "3️⃣ Telefon raqamingizni yuboring:\n"
+            "_(Tugmani bosing — bu sizning haqiqiy raqamingizni tasdiqlaydi)_",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup([
+                [KeyboardButton("📱 Telefon raqamimni yuborish", request_contact=True)],
+                [KeyboardButton("⏭ O'tkazib yuborish")]
+            ], resize_keyboard=True)
+        )
+        return
+
+    if action == "profile_phone":
+        if text == "⏭ O'tkazib yuborish":
+            context.user_data.clear()
+            await update.message.reply_text("Yaxshi!", reply_markup=main_menu_keyboard())
+            return
+        # Telefon tugma orqali yuborildi
+        if update.message.contact:
+            phone = update.message.contact.phone_number
+            if not phone.startswith("+"):
+                phone = "+" + phone
+            context.user_data["p_phone"] = phone
+            context.user_data["action"] = "profile_grade"
+            await update.message.reply_text(
+                f"✅ Telefon: *{phone}*\n\n"
+                "4️⃣ Sinfingiz yoki guruhingiz:\n"
+                "_(Masalan: 11-A, 10-B, Abituriyent)_",
+                parse_mode="Markdown",
+                reply_markup=ReplyKeyboardMarkup(
+                    [[KeyboardButton("⏭ O'tkazib yuborish")]],
+                    resize_keyboard=True
+                )
+            )
+        else:
+            # Tugma bosilmay matn yozilgan — rad etish
+            await update.message.reply_text(
+                "❌ Iltimos, quyidagi *📱 Telefon raqamimni yuborish* tugmasini bosing!\n\n"
+                "_(Bu sizning haqiqiy raqamingizni tasdiqlovchi yagona usul)_",
+                parse_mode="Markdown",
+                reply_markup=ReplyKeyboardMarkup([
+                    [KeyboardButton("📱 Telefon raqamimni yuborish", request_contact=True)],
+                    [KeyboardButton("⏭ O'tkazib yuborish")]
+                ], resize_keyboard=True)
+            )
+        return
+
+    if action == "profile_grade":
+        if text == "⏭ O'tkazib yuborish":
+            context.user_data.clear()
+            await update.message.reply_text("Yaxshi!", reply_markup=main_menu_keyboard())
+            return
+        user_id = update.effective_user.id
+        name = context.user_data.get("p_name", update.effective_user.full_name)
+        region = context.user_data.get("p_region", "—")
+        phone = context.user_data.get("p_phone", "—")
+        db.update_profile(user_id, name, region, phone, text)
+        context.user_data.clear()
+        await update.message.reply_text(
+            "✅ *Ma'lumotlaringiz saqlandi!*\n\n"
+            f"👤 Ism: *{name}*\n"
+            f"📍 Joy: *{region}*\n"
+            f"📞 Tel: *{phone}*\n"
+            f"🎓 Sinf: *{text}*\n\n"
+            "Endi barcha funksiyalardan foydalanishingiz mumkin! 👇",
+            parse_mode="Markdown",
+            reply_markup=main_menu_keyboard()
+        )
+        return
+
     # ── MS TEST O'QUVCHI MA'LUMOTLARI ──
     if action == "ms_student_name":
         if text == "◀️ Orqaga":
@@ -2772,7 +2900,7 @@ def main():
     app.add_handler(CommandHandler("premium_ber", admin_premium_ber_cmd))
     app.add_handler(CommandHandler("balans_ber", admin_balans_ber_cmd))
     app.add_handler(MessageHandler(
-        (filters.TEXT | filters.VIDEO | filters.Document.ALL | filters.PHOTO) & ~filters.COMMAND,
+        (filters.TEXT | filters.VIDEO | filters.Document.ALL | filters.PHOTO | filters.CONTACT) & ~filters.COMMAND,
         handle_message
     ))
 
