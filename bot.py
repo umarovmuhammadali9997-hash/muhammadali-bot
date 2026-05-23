@@ -864,21 +864,21 @@ async def test_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logger.error(f"Natija saqlashda xato: {e}")
 
-        # Video tahlili bor-yo'qligini tekshirish
+        context.user_data.clear()
+        await query.edit_message_text(result_text, parse_mode="Markdown")
+
+        # Video yechimni avtomatik yuborish
         video = db.get_test_video(test["code"])
         if video:
-            video_keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("🎬 Video tahlilini ko'rish", callback_data=f"watch_video_{test['code']}")]
-            ])
-        else:
-            video_keyboard = None
-
-        context.user_data.clear()
-        await query.edit_message_text(
-            result_text,
-            parse_mode="Markdown",
-            reply_markup=video_keyboard
-        )
+            try:
+                await context.bot.send_video(
+                    chat_id=query.from_user.id,
+                    video=video["video_file_id"],
+                    caption=f"🎬 *{test['title']} — Video yechim*\n\nHar bir savolni tahlil bilan ko'ring!",
+                    parse_mode="Markdown"
+                )
+            except Exception as e:
+                logger.error(f"Video yuborishda xato: {e}")
 
 async def masala_sertifikat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -1693,20 +1693,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["current_test"] = test
         context.user_data["user_answers"] = {}
 
-        try:
-            if test.get("pdf_file_id"):
+        # PDF yuborish
+        if test.get("pdf_file_id"):
+            try:
                 await update.message.reply_document(
                     document=test["pdf_file_id"],
-                    caption=f"📄 *{test['title']}*",
+                    caption=f"📋 *{test['title']}* — Test savollari",
                     parse_mode="Markdown"
                 )
-        except:
-            pass
+            except:
+                pass
 
+        # Tugmalar chiqarish - build_answer_keyboard ishlatiladi
         await update.message.reply_text(
             f"🔥 *{test['title']}*\n\n"
-            f"📊 30 ta savol — har birini bosib javob bering 👇\n"
-            f"_(❓ = javob berilmagan)_",
+            f"📊 30 ta savol — har birini bosib A/B/C/D belgilang 👇\n"
+            f"Barchasini belgilab bo'lsangiz natija avtomatik chiqadi!",
             parse_mode="Markdown",
             reply_markup=build_answer_keyboard({}, 30)
         )
@@ -2198,24 +2200,27 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ── KONTENT QO'SHISH: bo'lim tanlash ──
     # ── DTM 30 TEST QO'SHISH (admin) ──
     if action == "dtm30_admin_step1":
+        # Kod
         if text == "◀️ Bekor qilish":
             context.user_data.clear()
             await update.message.reply_text("Bekor qilindi.", reply_markup=admin_keyboard())
             return
-        # Test kodi
         existing = db.get_test(text.upper())
         if existing:
-            await update.message.reply_text(f"❌ *{text.upper()}* kodi band! Boshqa kod tanlang.", parse_mode="Markdown")
+            await update.message.reply_text(f"❌ *{text.upper()}* kodi band!", parse_mode="Markdown")
             return
         context.user_data["dtm30_code"] = text.upper()
         context.user_data["action"] = "dtm30_admin_step2"
         await update.message.reply_text(
-            f"✅ Kod: *{text.upper()}*\n\n2-qadam: Test sarlavhasini yozing:\n_(Masalan: DTM 2024 - 1-variant)_",
+            f"✅ Kod: *{text.upper()}*\n\n"
+            "2-qadam: Test sarlavhasini yozing:\n"
+            "_(Masalan: DTM 2024 - 1-variant)_",
             parse_mode="Markdown"
         )
         return
 
     if action == "dtm30_admin_step2":
+        # Sarlavha
         if text == "◀️ Bekor qilish":
             context.user_data.clear()
             await update.message.reply_text("Bekor qilindi.", reply_markup=admin_keyboard())
@@ -2223,12 +2228,38 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["dtm30_title"] = text
         context.user_data["action"] = "dtm30_admin_step3"
         await update.message.reply_text(
-            f"✅ Sarlavha: *{text}*\n\n3-qadam: Test kalit javoblarini yozing\n_(30 ta, vergul bilan: A,B,C,D,...)_",
+            f"✅ Sarlavha: *{text}*\n\n"
+            "3-qadam: Test savollar PDF faylini yuboring\n"
+            "_(Bu savolar fayli — o'quvchi test ishlash uchun oladi)_",
             parse_mode="Markdown"
         )
         return
 
     if action == "dtm30_admin_step3":
+        # Test PDF (savollar)
+        if text == "◀️ Bekor qilish":
+            context.user_data.clear()
+            await update.message.reply_text("Bekor qilindi.", reply_markup=admin_keyboard())
+            return
+        msg = update.message
+        if msg.document:
+            context.user_data["dtm30_pdf"] = msg.document.file_id
+        elif text and text.lower() in ["yo'q", "yoq"]:
+            context.user_data["dtm30_pdf"] = None
+        else:
+            await update.message.reply_text("❌ PDF fayl yuboring yoki 'yo'q' deb yozing.")
+            return
+        context.user_data["action"] = "dtm30_admin_step4"
+        await update.message.reply_text(
+            "✅ Test savollari saqlandi!\n\n"
+            "4-qadam: Kalit javoblarini yozing\n"
+            "_(30 ta, vergul bilan: A,B,C,D,A,B,...)_",
+            parse_mode="Markdown"
+        )
+        return
+
+    if action == "dtm30_admin_step4":
+        # Kalit javoblar
         if text == "◀️ Bekor qilish":
             context.user_data.clear()
             await update.message.reply_text("Bekor qilindi.", reply_markup=admin_keyboard())
@@ -2236,41 +2267,24 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ans_list = [a.strip() for a in text.split(",")]
         if len(ans_list) != 30:
             await update.message.reply_text(
-                f"❌ *{len(ans_list)} ta kalit* kiritdingiz, *30 ta* kerak!\nQayta kiriting.",
+                f"❌ *{len(ans_list)} ta kalit* kiritdingiz, *30 ta* kerak!\n"
+                "Qayta kiriting.",
                 parse_mode="Markdown"
             )
             return
         context.user_data["dtm30_answers"] = text
-        context.user_data["action"] = "dtm30_admin_step4"
-        await update.message.reply_text(
-            "✅ Kalit saqlandi!\n\n4-qadam: Test PDF faylini yuboring\n_(Fayl bo'lmasa 'yo'q' deb yozing)_",
-            parse_mode="Markdown"
-        )
-        return
-
-    if action == "dtm30_admin_step4":
-        if text == "◀️ Bekor qilish":
-            context.user_data.clear()
-            await update.message.reply_text("Bekor qilindi.", reply_markup=admin_keyboard())
-            return
-        msg = update.message
-        pdf_id = None
-        if msg.document:
-            pdf_id = msg.document.file_id
-        elif text and text.lower() in ["yo'q", "yoq"]:
-            pdf_id = None
-        else:
-            await update.message.reply_text("❌ PDF fayl yuboring yoki 'yo'q' deb yozing.")
-            return
-        context.user_data["dtm30_pdf"] = pdf_id
         context.user_data["action"] = "dtm30_admin_step5"
         await update.message.reply_text(
-            "✅ PDF saqlandi!\n\n5-qadam: Video yechimini yuboring\n_(Video bo'lmasa 'yo'q' deb yozing)_",
+            "✅ Kalit javoblar saqlandi!\n\n"
+            "5-qadam: Video yechimni yuboring\n"
+            "_(Test ishlagan o'quvchi natijadan keyin shu videoni ko'radi)_\n"
+            "_(Video bo'lmasa 'yo'q' deb yozing)_",
             parse_mode="Markdown"
         )
         return
 
     if action == "dtm30_admin_step5":
+        # Video yechim
         if text == "◀️ Bekor qilish":
             context.user_data.clear()
             await update.message.reply_text("Bekor qilindi.", reply_markup=admin_keyboard())
@@ -2285,7 +2299,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ Video yuboring yoki 'yo'q' deb yozing.")
             return
 
-        # Hammasini saqlash
         user_id = update.effective_user.id
         code = context.user_data.get("dtm30_code")
         title = context.user_data.get("dtm30_title")
@@ -2294,14 +2307,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         db.add_teacher_test(code, title, pdf_id, answers, 30, user_id)
         if video_id:
-            db.add_test_video(code, video_id, f"{title} - Video yechim", user_id)
+            db.add_test_video(code, video_id, f"{title} — Video yechim", user_id)
 
         context.user_data.clear()
         await update.message.reply_text(
             f"✅ *DTM 30-talik test qo'shildi!*\n\n"
             f"📝 Sarlavha: *{title}*\n"
             f"🔑 Kod: `{code}`\n"
-            f"📄 PDF: {'✅' if pdf_id else '❌'}\n"
+            f"📋 Savollar: {'✅' if pdf_id else '❌'}\n"
             f"🎬 Video yechim: {'✅' if video_id else '❌'}\n\n"
             f"Foydalanuvchilar 🔥 DTM 30 Testlar bo'limida ko'radi!",
             parse_mode="Markdown",
@@ -2463,7 +2476,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def dtm30_select_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """DTM 30-talik test tanlandi"""
+    """DTM 30-talik test tanlandi — avval kalit PDF yuboriladi, keyin timer"""
     query = update.callback_query
     await query.answer()
     code = query.data.replace("dtm30_", "")
@@ -2474,9 +2487,23 @@ async def dtm30_select_callback(update: Update, context: ContextTypes.DEFAULT_TY
 
     context.user_data["action"] = "dtm30_student_name"
     context.user_data["selected_test_code"] = code
+
+    # Avval test savollar PDF ni yuborish
+    if test.get("pdf_file_id"):
+        try:
+            await context.bot.send_document(
+                chat_id=query.from_user.id,
+                document=test["pdf_file_id"],
+                caption=f"📋 *{test['title']}*\n\nTest savollari — diqqat bilan o'qing!",
+                parse_mode="Markdown"
+            )
+        except:
+            pass
+
     await query.edit_message_text(
-        f"✅ *{test['title']}* tanlandi!\n\n"
-        "Davom etish uchun ma'lumotlaringiz kerak:\n\n"
+        f"📋 *{test['title']}*\n\n"
+        "⏱ Vaqt: *1 soat 30 daqiqa*\n\n"
+        "Javoblarni tekshirish uchun avval ma'lumotlaringizni kiriting:\n\n"
         "1️⃣ To'liq ismingizni yozing:",
         parse_mode="Markdown"
     )
