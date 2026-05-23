@@ -1811,7 +1811,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if text == "⏭ O'tkazib yuborish":
             context.user_data.clear()
             await update.message.reply_text(
-                "Yaxshi! Keyin ham to'ldirishingiz mumkin.",
+                "Yaxshi!",
                 reply_markup=main_menu_keyboard()
             )
             return
