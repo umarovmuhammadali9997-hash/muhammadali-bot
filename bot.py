@@ -2237,25 +2237,35 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if action == "dtm30_admin_step3":
         # Test PDF (savollar)
-        if text == "◀️ Bekor qilish":
+        msg = update.message
+        if text and text == "◀️ Bekor qilish":
             context.user_data.clear()
             await update.message.reply_text("Bekor qilindi.", reply_markup=admin_keyboard())
             return
-        msg = update.message
         if msg.document:
             context.user_data["dtm30_pdf"] = msg.document.file_id
+            context.user_data["action"] = "dtm30_admin_step4"
+            await update.message.reply_text(
+                "✅ Test savollari saqlandi!\n\n"
+                "4-qadam: Kalit javoblarini yozing\n"
+                "_(30 ta, vergul bilan: A,B,C,D,A,B,...)_",
+                parse_mode="Markdown"
+            )
         elif text and text.lower() in ["yo'q", "yoq"]:
             context.user_data["dtm30_pdf"] = None
+            context.user_data["action"] = "dtm30_admin_step4"
+            await update.message.reply_text(
+                "✅ PDF o'tkazib yuborildi.\n\n"
+                "4-qadam: Kalit javoblarini yozing\n"
+                "_(30 ta, vergul bilan: A,B,C,D,A,B,...)_",
+                parse_mode="Markdown"
+            )
         else:
-            await update.message.reply_text("❌ PDF fayl yuboring yoki 'yo'q' deb yozing.")
-            return
-        context.user_data["action"] = "dtm30_admin_step4"
-        await update.message.reply_text(
-            "✅ Test savollari saqlandi!\n\n"
-            "4-qadam: Kalit javoblarini yozing\n"
-            "_(30 ta, vergul bilan: A,B,C,D,A,B,...)_",
-            parse_mode="Markdown"
-        )
+            await update.message.reply_text(
+                "📄 Test savollari PDF faylini yuboring\n"
+                "_(yoki 'yo'q' deb yozing)_",
+                parse_mode="Markdown"
+            )
         return
 
     if action == "dtm30_admin_step4":
@@ -2285,18 +2295,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if action == "dtm30_admin_step5":
         # Video yechim
-        if text == "◀️ Bekor qilish":
+        msg = update.message
+        if text and text == "◀️ Bekor qilish":
             context.user_data.clear()
             await update.message.reply_text("Bekor qilindi.", reply_markup=admin_keyboard())
             return
-        msg = update.message
         video_id = None
         if msg.video:
             video_id = msg.video.file_id
         elif text and text.lower() in ["yo'q", "yoq"]:
             video_id = None
         else:
-            await update.message.reply_text("❌ Video yuboring yoki 'yo'q' deb yozing.")
+            await update.message.reply_text(
+                "🎬 Video yechim faylini yuboring\n"
+                "_(yoki 'yo'q' deb yozing)_",
+                parse_mode="Markdown"
+            )
             return
 
         user_id = update.effective_user.id
