@@ -1312,7 +1312,11 @@ async def dtm_30_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # Foydalanuvchining oxirgi natijalarini ko'rsatish
-    my_results = db.get_user_test_results(user_id, limit=3)
+    try:
+        my_results = db.get_user_test_results(user_id, limit=3)
+    except:
+        my_results = []
+
     results_text = ""
     if my_results:
         results_text = "\n📊 *Sizning oxirgi natijalaringiz:*\n"
@@ -1323,8 +1327,7 @@ async def dtm_30_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = []
     for t in dtm_tests:
-        # Foydalanuvchi bu testni ishlagan bo'lsa belgilansin
-        done = any(r['test_code'] == t['code'] for r in my_results)
+        done = my_results and any(r['test_code'] == t['code'] for r in my_results)
         label = f"✅ {t['title']}" if done else f"📝 {t['title']}"
         keyboard.append([InlineKeyboardButton(label, callback_data=f"dtm30_{t['code']}")])
 
@@ -2537,7 +2540,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def dtm30_select_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """DTM 30-talik test tanlandi — avval kalit PDF yuboriladi, keyin timer"""
+    """DTM 30-talik test tanlandi"""
     query = update.callback_query
     await query.answer()
     code = query.data.replace("dtm30_", "")
@@ -2546,27 +2549,37 @@ async def dtm30_select_callback(update: Update, context: ContextTypes.DEFAULT_TY
         await query.edit_message_text("❌ Test topilmadi.")
         return
 
-    context.user_data["action"] = "dtm30_student_name"
-    context.user_data["selected_test_code"] = code
+    user_id = query.from_user.id
 
-    # Avval test savollar PDF ni yuborish
+    # Oldingi holatni tozalash
+    context.user_data.clear()
+    context.user_data["current_test"] = test
+    context.user_data["user_answers"] = {}
+    context.user_data["action"] = "dtm30_answering"
+    context.user_data["s_name"] = query.from_user.full_name
+    context.user_data["s_region"] = "—"
+    context.user_data["s_phone"] = "—"
+    context.user_data["s_grade"] = "—"
+
+    # PDF yuborish
     if test.get("pdf_file_id"):
         try:
             await context.bot.send_document(
-                chat_id=query.from_user.id,
+                chat_id=user_id,
                 document=test["pdf_file_id"],
-                caption=f"📋 *{test['title']}*\n\nTest savollari — diqqat bilan o'qing!",
+                caption=f"📋 *{test['title']}* — Test savollari",
                 parse_mode="Markdown"
             )
         except:
             pass
 
+    # Tugmalar chiqarish
     await query.edit_message_text(
-        f"📋 *{test['title']}*\n\n"
-        "⏱ Vaqt: *1 soat 30 daqiqa*\n\n"
-        "Javoblarni tekshirish uchun avval ma'lumotlaringizni kiriting:\n\n"
-        "1️⃣ To'liq ismingizni yozing:",
-        parse_mode="Markdown"
+        f"🔥 *{test['title']}*\n\n"
+        f"📊 30 ta savol — har birini bosib A/B/C/D belgilang 👇\n"
+        f"Barchasini belgilab bo'lsangiz natija avtomatik chiqadi!",
+        parse_mode="Markdown",
+        reply_markup=build_answer_keyboard({}, 30)
     )
 
 async def watch_video_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
