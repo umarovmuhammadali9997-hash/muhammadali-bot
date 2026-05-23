@@ -124,7 +124,7 @@ def admin_keyboard():
         [KeyboardButton("🔥 DTM30: Yangi test qo'shish"), KeyboardButton("🗑 DTM30: Test o'chirish")],
         [KeyboardButton("➕ Kontent qo'shish"), KeyboardButton("🗑 Kontent o'chirish")],
         [KeyboardButton("📋 Testlar"), KeyboardButton("➕ Test qo'shish")],
-        [KeyboardButton("📊 Test natijalari")],
+        [KeyboardButton("📊 Test natijalari"), KeyboardButton("👥 Foydalanuvchilar")],
         [KeyboardButton("👥 Adminlar"), KeyboardButton("📊 Statistika")],
         [KeyboardButton("📢 Hammaga xabar"), KeyboardButton("◀️ Orqaga")],
     ], resize_keyboard=True)
@@ -1243,6 +1243,94 @@ async def admin_video_qosh(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown",
         reply_markup=ReplyKeyboardMarkup([[KeyboardButton("◀️ Bekor qilish")]], resize_keyboard=True)
     )
+
+async def all_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        return
+    try:
+        with db.connect() as conn:
+            conn.row_factory = __import__('sqlite3').Row
+            users = [dict(r) for r in conn.execute(
+                "SELECT * FROM users ORDER BY created_at DESC"
+            ).fetchall()]
+    except:
+        users = []
+
+    if not users:
+        await update.message.reply_text("📭 Foydalanuvchilar yo'q.")
+        return
+
+    # Sahifalash - har safar 20 ta
+    page = context.user_data.get("users_page", 0)
+    start = page * 20
+    chunk = users[start:start+20]
+
+    text = f"👥 *Foydalanuvchilar ({len(users)} ta)*\n"
+    text += f"_{start+1}-{min(start+len(chunk), len(users))} ko'rsatilmoqda_\n\n"
+
+    for u in chunk:
+        name = u.get("full_name") or "Noma'lum"
+        phone = u.get("phone") or "—"
+        region = u.get("region") or "—"
+        grade = u.get("grade") or "—"
+        username = f"@{u['username']}" if u.get("username") else "—"
+        text += (
+            f"👤 *{name}* ({username})\n"
+            f"📍 {region} | 🎓 {grade} | 📞 {phone}\n\n"
+        )
+
+    # Oldingi/Keyingi tugmalar
+    nav_buttons = []
+    if start > 0:
+        nav_buttons.append(InlineKeyboardButton("⬅️ Oldingi", callback_data=f"users_page_{page-1}"))
+    if start + 20 < len(users):
+        nav_buttons.append(InlineKeyboardButton("Keyingi ➡️", callback_data=f"users_page_{page+1}"))
+
+    keyboard = InlineKeyboardMarkup([nav_buttons]) if nav_buttons else None
+    await update.message.reply_text(text, parse_mode="Markdown", reply_markup=keyboard)
+
+async def users_page_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    if not is_admin(query.from_user.id):
+        return
+    page = int(query.data.replace("users_page_", ""))
+    context.user_data["users_page"] = page
+
+    try:
+        with db.connect() as conn:
+            conn.row_factory = __import__('sqlite3').Row
+            users = [dict(r) for r in conn.execute(
+                "SELECT * FROM users ORDER BY created_at DESC"
+            ).fetchall()]
+    except:
+        users = []
+
+    start = page * 20
+    chunk = users[start:start+20]
+
+    text = f"👥 *Foydalanuvchilar ({len(users)} ta)*\n"
+    text += f"_{start+1}-{min(start+len(chunk), len(users))} ko'rsatilmoqda_\n\n"
+
+    for u in chunk:
+        name = u.get("full_name") or "Noma'lum"
+        phone = u.get("phone") or "—"
+        region = u.get("region") or "—"
+        grade = u.get("grade") or "—"
+        username = f"@{u['username']}" if u.get("username") else "—"
+        text += (
+            f"👤 *{name}* ({username})\n"
+            f"📍 {region} | 🎓 {grade} | 📞 {phone}\n\n"
+        )
+
+    nav_buttons = []
+    if start > 0:
+        nav_buttons.append(InlineKeyboardButton("⬅️ Oldingi", callback_data=f"users_page_{page-1}"))
+    if start + 20 < len(users):
+        nav_buttons.append(InlineKeyboardButton("Keyingi ➡️", callback_data=f"users_page_{page+1}"))
+
+    keyboard = InlineKeyboardMarkup([nav_buttons]) if nav_buttons else None
+    await query.edit_message_text(text, parse_mode="Markdown", reply_markup=keyboard)
 
 async def test_natijalari(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -2643,6 +2731,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🛠 Admin panel": admin_panel,
         "➕ Test qo'shish": admin_test_qosh,
         "📊 Test natijalari": test_natijalari,
+        "👥 Foydalanuvchilar": all_users,
         "📊 Natijalarni ko'rish": test_natijalari,
         "📋 Testlar": admin_test_list,
         "➕ Kontent qo'shish": kontent_qosh_start,
@@ -2888,6 +2977,7 @@ def main():
     app.add_handler(CallbackQueryHandler(test_callback, pattern="^(q_|ans_|check_result|reset_answers|back_to_answers)"))
     app.add_handler(CallbackQueryHandler(ms_test_callback, pattern="^(ms_|msans_)"))
     app.add_handler(CallbackQueryHandler(del_test_callback, pattern="^del_test_"))
+    app.add_handler(CallbackQueryHandler(users_page_callback, pattern="^users_page_"))
     app.add_handler(CallbackQueryHandler(del_dtm30_callback, pattern="^del_dtm30_"))
     app.add_handler(CallbackQueryHandler(del_section_back_callback, pattern="^del_section_back$"))
     app.add_handler(CallbackQueryHandler(del_section_callback, pattern="^del_section_(?!back)"))
