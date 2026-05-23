@@ -112,6 +112,8 @@ def admin_keyboard():
 
 def sections_keyboard():
     return ReplyKeyboardMarkup([
+        # ── DTM 30-talik testlar (test + video yechim) ──
+        [KeyboardButton("🔥 DTM30: Yangi test qo'shish")],
         # Nazariya
         [KeyboardButton("📖 Nazariy mavzular darsi")],
         [KeyboardButton("📝 Mavzular yuzasidan testlar")],
@@ -1032,6 +1034,18 @@ async def admin_statistika(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"👥 Jami foydalanuvchilar: *{stats['total']}*\n"
         f"📅 Bugun qo'shilganlar: *{stats['today']}*",
         parse_mode="Markdown"
+    )
+
+async def dtm30_admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        return
+    context.user_data["action"] = "dtm30_admin_step1"
+    await update.message.reply_text(
+        "🔥 *DTM 30-talik test qo'shish*\n\n"
+        "Bu yerda test PDF va video yechim birga saqlanadi.\n\n"
+        "1-qadam: Test uchun noyob kod kiriting:\n_(Masalan: DTM2024V1)_",
+        parse_mode="Markdown",
+        reply_markup=ReplyKeyboardMarkup([[KeyboardButton("◀️ Bekor qilish")]], resize_keyboard=True)
     )
 
 async def kontent_qosh_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2182,6 +2196,119 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # ── KONTENT QO'SHISH: bo'lim tanlash ──
+    # ── DTM 30 TEST QO'SHISH (admin) ──
+    if action == "dtm30_admin_step1":
+        if text == "◀️ Bekor qilish":
+            context.user_data.clear()
+            await update.message.reply_text("Bekor qilindi.", reply_markup=admin_keyboard())
+            return
+        # Test kodi
+        existing = db.get_test(text.upper())
+        if existing:
+            await update.message.reply_text(f"❌ *{text.upper()}* kodi band! Boshqa kod tanlang.", parse_mode="Markdown")
+            return
+        context.user_data["dtm30_code"] = text.upper()
+        context.user_data["action"] = "dtm30_admin_step2"
+        await update.message.reply_text(
+            f"✅ Kod: *{text.upper()}*\n\n2-qadam: Test sarlavhasini yozing:\n_(Masalan: DTM 2024 - 1-variant)_",
+            parse_mode="Markdown"
+        )
+        return
+
+    if action == "dtm30_admin_step2":
+        if text == "◀️ Bekor qilish":
+            context.user_data.clear()
+            await update.message.reply_text("Bekor qilindi.", reply_markup=admin_keyboard())
+            return
+        context.user_data["dtm30_title"] = text
+        context.user_data["action"] = "dtm30_admin_step3"
+        await update.message.reply_text(
+            f"✅ Sarlavha: *{text}*\n\n3-qadam: Test kalit javoblarini yozing\n_(30 ta, vergul bilan: A,B,C,D,...)_",
+            parse_mode="Markdown"
+        )
+        return
+
+    if action == "dtm30_admin_step3":
+        if text == "◀️ Bekor qilish":
+            context.user_data.clear()
+            await update.message.reply_text("Bekor qilindi.", reply_markup=admin_keyboard())
+            return
+        ans_list = [a.strip() for a in text.split(",")]
+        if len(ans_list) != 30:
+            await update.message.reply_text(
+                f"❌ *{len(ans_list)} ta kalit* kiritdingiz, *30 ta* kerak!\nQayta kiriting.",
+                parse_mode="Markdown"
+            )
+            return
+        context.user_data["dtm30_answers"] = text
+        context.user_data["action"] = "dtm30_admin_step4"
+        await update.message.reply_text(
+            "✅ Kalit saqlandi!\n\n4-qadam: Test PDF faylini yuboring\n_(Fayl bo'lmasa 'yo'q' deb yozing)_",
+            parse_mode="Markdown"
+        )
+        return
+
+    if action == "dtm30_admin_step4":
+        if text == "◀️ Bekor qilish":
+            context.user_data.clear()
+            await update.message.reply_text("Bekor qilindi.", reply_markup=admin_keyboard())
+            return
+        msg = update.message
+        pdf_id = None
+        if msg.document:
+            pdf_id = msg.document.file_id
+        elif text and text.lower() in ["yo'q", "yoq"]:
+            pdf_id = None
+        else:
+            await update.message.reply_text("❌ PDF fayl yuboring yoki 'yo'q' deb yozing.")
+            return
+        context.user_data["dtm30_pdf"] = pdf_id
+        context.user_data["action"] = "dtm30_admin_step5"
+        await update.message.reply_text(
+            "✅ PDF saqlandi!\n\n5-qadam: Video yechimini yuboring\n_(Video bo'lmasa 'yo'q' deb yozing)_",
+            parse_mode="Markdown"
+        )
+        return
+
+    if action == "dtm30_admin_step5":
+        if text == "◀️ Bekor qilish":
+            context.user_data.clear()
+            await update.message.reply_text("Bekor qilindi.", reply_markup=admin_keyboard())
+            return
+        msg = update.message
+        video_id = None
+        if msg.video:
+            video_id = msg.video.file_id
+        elif text and text.lower() in ["yo'q", "yoq"]:
+            video_id = None
+        else:
+            await update.message.reply_text("❌ Video yuboring yoki 'yo'q' deb yozing.")
+            return
+
+        # Hammasini saqlash
+        user_id = update.effective_user.id
+        code = context.user_data.get("dtm30_code")
+        title = context.user_data.get("dtm30_title")
+        answers = context.user_data.get("dtm30_answers")
+        pdf_id = context.user_data.get("dtm30_pdf")
+
+        db.add_teacher_test(code, title, pdf_id, answers, 30, user_id)
+        if video_id:
+            db.add_test_video(code, video_id, f"{title} - Video yechim", user_id)
+
+        context.user_data.clear()
+        await update.message.reply_text(
+            f"✅ *DTM 30-talik test qo'shildi!*\n\n"
+            f"📝 Sarlavha: *{title}*\n"
+            f"🔑 Kod: `{code}`\n"
+            f"📄 PDF: {'✅' if pdf_id else '❌'}\n"
+            f"🎬 Video yechim: {'✅' if video_id else '❌'}\n\n"
+            f"Foydalanuvchilar 🔥 DTM 30 Testlar bo'limida ko'radi!",
+            parse_mode="Markdown",
+            reply_markup=admin_keyboard()
+        )
+        return
+
     if action == "add_content_section":
         if text == "◀️ Bekor qilish":
             context.user_data.clear()
@@ -2315,6 +2442,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📊 Natijalarni ko'rish": test_natijalari,
         "📋 Testlar": admin_test_list,
         "➕ Kontent qo'shish": kontent_qosh_start,
+        "🔥 DTM30: Yangi test qo'shish": dtm30_admin_start,
         "🗑 Kontent o'chirish": kontent_ochi_start,
         "📊 Statistika": admin_statistika,
         "👥 Adminlar": adminlar,
