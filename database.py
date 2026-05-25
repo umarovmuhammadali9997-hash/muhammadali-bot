@@ -21,6 +21,9 @@ class Database:
                     umm_coins INTEGER DEFAULT 0,
                     referred_by INTEGER DEFAULT NULL,
                     premium_until TEXT DEFAULT NULL,
+                    region TEXT DEFAULT NULL,
+                    phone TEXT DEFAULT NULL,
+                    grade TEXT DEFAULT NULL,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP
                 )
             """)
@@ -42,6 +45,18 @@ class Database:
                 pass
             try:
                 conn.execute("ALTER TABLE users ADD COLUMN premium_until TEXT DEFAULT NULL")
+            except:
+                pass
+            try:
+                conn.execute("ALTER TABLE users ADD COLUMN region TEXT DEFAULT NULL")
+            except:
+                pass
+            try:
+                conn.execute("ALTER TABLE users ADD COLUMN phone TEXT DEFAULT NULL")
+            except:
+                pass
+            try:
+                conn.execute("ALTER TABLE users ADD COLUMN grade TEXT DEFAULT NULL")
             except:
                 pass
             # Referal log

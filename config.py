@@ -68,4 +68,4 @@ PREMIUM_PRICES = {
 }
 
 # Bot username (@siz bergan username)
-BOT_USERNAME = "umm_biologiya_bot"  # @ belgisisiz
+BOT_USERNAME = "umm_biologiya_bot"  # @umm_biologiya_bot
