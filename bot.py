@@ -7,6 +7,7 @@ from telegram.ext import (
 from database import Database
 from config import BOT_TOKEN, SUPER_ADMINS, SECTIONS, SOCIAL_LINKS, UMM_PER_REFERRAL, UMM_PER_PREMIUM_REF, UMM_FOR_PREMIUM, PREMIUM_PRICES, BOT_USERNAME
 import re
+import os
 
 def validate_phone(phone: str) -> bool:
     """O'zbek telefon raqamini tekshirish"""
@@ -248,7 +249,7 @@ async def back_to_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    is_new = db.get_user(user.id) is None
+    is_new = db.get_user(user.id) is None  # add_user DAN OLDIN tekshirish
     db.add_user(user.id, user.full_name, user.username)
     context.user_data.clear()
 
@@ -257,22 +258,24 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if args and is_new:
         try:
             referrer_id = int(args[0])
-            success = db.set_referred_by_safe(user.id, referrer_id)
-            if success:
-                # Taklif qilganga UMM ber
-                db.add_umm(referrer_id, UMM_PER_REFERRAL)
-                db.add_referral(referrer_id, user.id, "join", UMM_PER_REFERRAL)
-                try:
-                    ref_count = db.get_referral_count(referrer_id)
-                    await context.bot.send_message(
-                        referrer_id,
-                        f"🎉 *Do'stingiz botga qo'shildi!*\n"
-                        f"💎 Sizga *+{UMM_PER_REFERRAL} UMM* tanga berildi!\n"
-                        f"👥 Jami taklif qilganlar: *{ref_count} ta*",
-                        parse_mode="Markdown"
-                    )
-                except:
-                    pass
+            # referrer o'zi bilan bir xil bo'lmasligi kerak
+            if referrer_id != user.id:
+                success = db.set_referred_by_safe(user.id, referrer_id)
+                if success:
+                    # Taklif qilganga UMM ber
+                    db.add_umm(referrer_id, UMM_PER_REFERRAL)
+                    db.add_referral(referrer_id, user.id, "join", UMM_PER_REFERRAL)
+                    try:
+                        ref_count = db.get_referral_count(referrer_id)
+                        await context.bot.send_message(
+                            referrer_id,
+                            f"🎉 *Do'stingiz botga qo'shildi!*\n"
+                            f"💎 Sizga *+{UMM_PER_REFERRAL} UMM* tanga berildi!\n"
+                            f"👥 Jami taklif qilganlar: *{ref_count} ta*",
+                            parse_mode="Markdown"
+                        )
+                    except:
+                        pass
         except:
             pass
 
@@ -321,7 +324,7 @@ async def shaxsiy_kabinet(update: Update, context: ContextTypes.DEFAULT_TYPE):
         is_prem = db.is_premium(user.id)
         ref_count = db.get_referral_count(user.id)
         premium_status = "✅ Aktiv" if is_prem else "❌ Yo'q"
-        ref_link = f"https://t.me/umm_biologiya_bot?start={user.id}"
+        ref_link = f"https://t.me/{BOT_USERNAME}?start={user.id}"
 
         await update.message.reply_text(
             f"👤 *Shaxsiy kabinet*\n\n"
@@ -349,7 +352,7 @@ async def umm_tangalarim(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     umm = db.get_umm(user_id)
     ref_count = db.get_referral_count(user_id)
-    ref_link = f"https://t.me/umm_biologiya_bot?start={user_id}"
+    ref_link = f"https://t.me/{BOT_USERNAME}?start={user_id}"
     await update.message.reply_text(
         f"💎 *UMM Tanga tizimi*\n\n"
         f"Sizda: *{umm} UMM*\n"
@@ -378,7 +381,7 @@ async def umm_premium_olish(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     else:
         kerak = UMM_FOR_PREMIUM - umm
-        ref_link = f"https://t.me/umm_biologiya_bot?start={user_id}"
+        ref_link = f"https://t.me/{BOT_USERNAME}?start={user_id}"
         await update.message.reply_text(
             f"💎 Sizda *{umm} UMM* bor\n"
             f"Premium uchun *{UMM_FOR_PREMIUM} UMM* kerak\n"
@@ -413,7 +416,7 @@ async def balansim(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def balans_toldirish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user = update.effective_user
-        ref_link = f"https://t.me/umm_biologiya_bot?start={user.id}"
+        ref_link = f"https://t.me/{BOT_USERNAME}?start={user.id}"
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("💳 Karta orqali to'ldirish", callback_data="pay_card")],
             [InlineKeyboardButton("👥 Referal orqali UMM ishlash", callback_data="pay_ref")],
@@ -464,7 +467,7 @@ async def pay_card_ref_callback(update: Update, context: ContextTypes.DEFAULT_TY
             reply_markup=keyboard
         )
     elif query.data == "pay_ref":
-        ref_link = f"https://t.me/umm_biologiya_bot?start={user_id}"
+        ref_link = f"https://t.me/{BOT_USERNAME}?start={user_id}"
         umm = db.get_umm(user_id)
         ref_count = db.get_referral_count(user_id)
         await query.edit_message_text(
