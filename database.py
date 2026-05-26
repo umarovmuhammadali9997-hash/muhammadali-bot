@@ -1,7 +1,14 @@
 import sqlite3
 
 class Database:
-    def __init__(self, db_path="muhammadali.db"):
+    def __init__(self, db_path=None):
+        if db_path is None:
+            import os
+            # Railway Volume bo'lsa /app/data, bo'lmasa local
+            if os.path.exists("/app/data"):
+                db_path = "/app/data/muhammadali.db"
+            else:
+                db_path = "muhammadali.db"
         self.db_path = db_path
         self.create_tables()
 
@@ -169,39 +176,60 @@ class Database:
             ).fetchone()
             return bool(row and row[0] is not None)
 
+    def get_referred_by(self, user_id):
+        """Foydalanuvchi qaysi referrer orqali kelganini qaytaradi"""
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT referred_by FROM users WHERE user_id=?", (user_id,)
+            ).fetchone()
+            return row[0] if row else None
+
+    def set_referred_by(self, user_id, referrer_id):
+        """Referal o'rnatish"""
+        with self.connect() as conn:
+            conn.execute(
+                "UPDATE users SET referred_by=? WHERE user_id=?",
+                (referrer_id, user_id)
+            )
+            conn.commit()
+
     def set_referred_by_safe(self, new_user_id, referrer_id):
         """
         Referal faqat bir marta va faqat yangi foydalanuvchi uchun.
         True qaytarsa — muvaffaqiyatli.
         """
         with self.connect() as conn:
-            # 1. Foydalanuvchi haqiqatan yangi bo'lishi kerak
+            # 1. O'zini o'zi taklif qila olmaydi
+            if new_user_id == referrer_id:
+                return False
+
+            # 2. Foydalanuvchi allaqachon referal orqali kelganmi?
             user_row = conn.execute(
-                "SELECT referred_by, created_at FROM users WHERE user_id=?", (new_user_id,)
+                "SELECT referred_by FROM users WHERE user_id=?", (new_user_id,)
             ).fetchone()
             if not user_row:
                 return False  # Foydalanuvchi topilmadi
             if user_row[0] is not None:
                 return False  # Allaqachon referal bor
 
-            # 2. O'zini o'zi taklif qila olmaydi
-            if new_user_id == referrer_id:
-                return False
-
-            # 3. Referrer mavjudmi?
-            ref_row = conn.execute(
-                "SELECT user_id FROM users WHERE user_id=?", (referrer_id,)
-            ).fetchone()
-            if not ref_row:
-                return False
-
-            # 4. Bir xil referral log yozilganmi?
+            # 3. Bir xil referral log yozilganmi?
             dup = conn.execute(
                 "SELECT id FROM referral_log WHERE referrer_id=? AND referred_id=?",
                 (referrer_id, new_user_id)
             ).fetchone()
             if dup:
                 return False
+
+            # 4. Referrer DB da yo'q bo'lsa — qo'shib qo'yamiz (placeholder)
+            ref_row = conn.execute(
+                "SELECT user_id FROM users WHERE user_id=?", (referrer_id,)
+            ).fetchone()
+            if not ref_row:
+                conn.execute(
+                    "INSERT OR IGNORE INTO users (user_id, full_name, username) VALUES (?,?,?)",
+                    (referrer_id, f"User {referrer_id}", "")
+                )
+                conn.commit()
 
             # Hammasi tekshirildi — saqlash
             conn.execute(
